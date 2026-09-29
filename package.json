@@ -1,0 +1,44 @@
+{
+  "name": "chenmedia-kundepriser",
+  "version": "0.1.0-beta",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "db:push": "prisma db push",
+    "db:seed": "tsx --env-file=.env prisma/seed.ts",
+    "db:setup": "prisma db push && npm run db:seed",
+    "admin:create": "tsx --env-file=.env scripts/create-admin.ts"
+  },
+  "dependencies": {
+    "@fontsource/merriweather": "5.3.0",
+    "@fontsource/open-sans": "5.3.0",
+    "@fontsource/space-mono": "5.3.0",
+    "@prisma/client": "6.19.3",
+    "image-size": "2.0.4",
+    "next": "15.5.26",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "22.20.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "15.5.26",
+    "postcss": "8.5.28",
+    "prisma": "6.19.3",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}

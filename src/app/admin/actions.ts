@@ -1,0 +1,123 @@
+"use server";
+
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { db } from "@/server/db";
+import { SESSION_COOKIE, login, logout, requireAdmin } from "@/server/admin-auth";
+import { clientIp } from "@/server/rate-limit";
+import { createCustomer, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
+import { contentSchema, STATUSES } from "@/lib/content";
+import { processJob } from "@/server/email";
+
+export interface ActionState { ok?: boolean; error?: string; problems?: string[] }
+
+export async function loginAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const email = String(fd.get("email") ?? "").trim();
+  const password = String(fd.get("password") ?? "");
+  if (!email || !password) return { error: "Skriv inn e-post og passord." };
+  const ip = clientIp(await headers());
+  const r = await login(email, password, ip);
+  if (!r.ok) {
+    return { error: r.error === "rate" ? "For mange forsøk. Vent 15 minutter og prøv igjen." : "Feil e-post eller passord." };
+  }
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, r.token, {
+    httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: r.maxAge,
+  });
+  redirect("/admin");
+}
+
+export async function logoutAction() {
+  await logout();
+  redirect("/admin/login");
+}
+
+export async function createCustomerAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const name = String(fd.get("name") ?? "").trim();
+  if (name.length < 2) return { error: "Skriv kundenavn (minst 2 tegn)." };
+  const c = await createCustomer(name);
+  redirect(`/admin/kunder/${c.id}`);
+}
+
+export async function saveDraftAction(customerId: string, name: string, contentJson: string): Promise<ActionState> {
+  await requireAdmin();
+  const nm = name.trim();
+  if (nm.length < 1) return { error: "Kundenavn kan ikke være tomt." };
+  let parsed;
+  try {
+    parsed = contentSchema.parse(JSON.parse(contentJson));
+  } catch {
+    return { error: "Innholdet er ugyldig. Kontroller feltene og prøv igjen." };
+  }
+  // Bilder må tilhøre denne kunden.
+  if (parsed.heroImageId) {
+    const a = await db.mediaAsset.findUnique({ where: { id: parsed.heroImageId } });
+    if (!a || a.customerId !== customerId) return { error: "Bildet tilhører ikke denne kunden." };
+  }
+  await saveDraft(customerId, nm, parsed);
+  revalidatePath(`/admin/kunder/${customerId}`);
+  return { ok: true };
+}
+
+export async function publishAction(customerId: string): Promise<ActionState> {
+  await requireAdmin();
+  try {
+    const r = await publish(customerId);
+    if (!r.ok) return { error: "Kan ikke publisere ennå.", problems: r.problems };
+  } catch {
+    return { error: "Publiseringen feilet. Ingenting er endret. Prøv igjen." };
+  }
+  revalidatePath(`/admin/kunder/${customerId}`);
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function rotateTokenAction(customerId: string): Promise<ActionState> {
+  await requireAdmin();
+  await rotateToken(customerId);
+  revalidatePath(`/admin/kunder/${customerId}`);
+  return { ok: true };
+}
+
+export async function setActiveAction(customerId: string, active: boolean): Promise<ActionState> {
+  await requireAdmin();
+  await setActive(customerId, active);
+  revalidatePath(`/admin/kunder/${customerId}`);
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function duplicateAction(customerId: string) {
+  await requireAdmin();
+  const c = await duplicateCustomer(customerId);
+  redirect(`/admin/kunder/${c.id}`);
+}
+
+const inquiryUpdate = z.object({ status: z.string().refine((s) => STATUSES.includes(s)), notes: z.string().max(10000) });
+
+export async function updateInquiryAction(id: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const p = inquiryUpdate.safeParse({ status: fd.get("status"), notes: String(fd.get("notes") ?? "") });
+  if (!p.success) return { error: "Ugyldig status eller notat." };
+  await db.inquiry.update({ where: { id }, data: { status: p.data.status, internalNotes: p.data.notes } });
+  revalidatePath(`/admin/foresporsler/${id}`);
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function deleteInquiryAction(id: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+  if (fd.get("confirm") !== "on") return { error: "Kryss av for å bekrefte at forespørselen skal slettes." };
+  await db.inquiry.delete({ where: { id } }); // e-postjobber slettes med cascade
+  redirect("/admin/foresporsler");
+}
+
+export async function retryEmailAction(jobId: string, inquiryId: string): Promise<void> {
+  await requireAdmin();
+  await processJob(jobId);
+  revalidatePath(`/admin/foresporsler/${inquiryId}`);
+  revalidatePath("/admin");
+}

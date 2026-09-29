@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  sessions     AdminSession[]
+}
+
+model AdminSession {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  adminId   String
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+}
+
+model Customer {
+  id               String           @id @default(cuid())
+  name             String
+  active           Boolean          @default(true)
+  needsRename      Boolean          @default(false)
+  tokenHash        String           @unique
+  tokenEnc         String
+  currentVersionId String?          @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  draft            CustomerDraft?
+  versions         PublishedVersion[] @relation("CustomerVersions")
+  currentVersion   PublishedVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  inquiries        Inquiry[]
+  assets           MediaAsset[]
+}
+
+model CustomerDraft {
+  customerId String   @id
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  content    String
+  updatedAt  DateTime @updatedAt
+}
+
+model PublishedVersion {
+  id           String    @id @default(cuid())
+  customerId   String
+  customer     Customer  @relation("CustomerVersions", fields: [customerId], references: [id], onDelete: Cascade)
+  number       Int
+  customerName String
+  label        String
+  content      String
+  publishedAt  DateTime  @default(now())
+  currentFor   Customer? @relation("CurrentVersion")
+  inquiries    Inquiry[]
+
+  @@unique([customerId, number])
+}
+
+model Inquiry {
+  id             String           @id @default(cuid())
+  reference      String           @unique
+  customerId     String
+  customer       Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  versionId      String
+  version        PublishedVersion @relation(fields: [versionId], references: [id])
+  packageId      String // pakke-ID eller "other"
+  snapshot       String // JSON: kundenavn, pakke, tillegg, vilkår slik kunden så dem
+  eventName      String
+  eventDate      String? // YYYY-MM-DD
+  dateUnknown    Boolean          @default(false)
+  location       String?
+  locationUnknown Boolean         @default(false)
+  timeframe      String?
+  description    String
+  contactName    String
+  contactEmail   String
+  contactPhone   String?
+  express        Boolean          @default(false)
+  printUse       Boolean          @default(false)
+  status         String           @default("new") // new | following_up | clarified | closed
+  internalNotes  String           @default("")
+  idempotencyKey String           @unique
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  emailJobs      EmailJob[]
+}
+
+model EmailJob {
+  id            String   @id @default(cuid())
+  inquiryId     String
+  inquiry       Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  type          String // team_notification | customer_receipt
+  recipient     String
+  replyTo       String?
+  subject       String
+  body          String
+  status        String   @default("pending") // pending | sent | failed | local_preview
+  attempts      Int      @default(0)
+  lastAttemptAt DateTime?
+  errorCategory String?
+  createdAt     DateTime @default(now())
+}
+
+model MediaAsset {
+  id           String   @id @default(cuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  storageKey   String
+  originalName String
+  mimeType     String
+  width        Int
+  height       Int
+  altText      String   @default("")
+  createdAt    DateTime @default(now())
+}
+
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+}

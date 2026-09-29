@@ -1,0 +1,17 @@
+node_modules
+.next
+.env
+.env.local
+*.db
+*.db-journal
+/storage
+/prisma/*.db
+next-env.d.ts
+tsconfig.tsbuildinfo
+playwright-report
+test-results
+.data
+storage-test
+prisma/test.db*
+storage-e2e
+prisma/e2e.db*

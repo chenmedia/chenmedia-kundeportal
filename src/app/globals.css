@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+/* Chen Media brandguideline V1: svart, krem og hvit. Én aksent (terrakotta) brukes sparsomt. */
+@theme {
+  --color-ink: #111111;
+  --color-cream: #fbf8d0;
+  --color-paper: #ffffff;
+  --color-accent: #c25a2e;
+  --color-accent-dark: #a24a24;
+  --color-muted: #55534a; /* svart 70 % på krem/hvit, AA-kontrast */
+  --color-line: #e4e0b8;
+  --color-line-strong: #111111;
+  --color-ok: #2f6b2f;
+  --color-err: #b3261e;
+
+  --font-display: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
+  --font-body: "Open Sans", system-ui, sans-serif;
+  --font-serif: "Merriweather", Georgia, serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+}
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+body.admin { background: #f7f6ec; }
+
+/* Titler: Helvetica 700, versaler, lett sperring (4 %) */
+.display, h1.display, h2.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.08;
+}
+.title { font-family: var(--font-display); font-weight: 700; line-height: 1.2; }
+.ingress { font-family: var(--font-serif); font-weight: 400; line-height: 1.7; }
+/* Etikett & tall: Space Mono 700, versaler, sperring 8 % */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+.mono-num { font-family: var(--font-mono); font-weight: 700; }
+
+:focus-visible { outline: 3px solid var(--color-ink); outline-offset: 3px; border-radius: 4px; }
+.on-dark :focus-visible { outline-color: #fff; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: 20px; padding-right: 20px; }
+@media (min-width: 768px) { .wrap { padding-left: 32px; padding-right: 32px; } }
+
+.card {
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  border-radius: 20px;
+}
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 0 24px; border-radius: 999px;
+  font-family: var(--font-body); font-weight: 700; font-size: 15px;
+  border: 2px solid transparent; cursor: pointer; text-decoration: none;
+  transition: background-color .15s, color .15s;
+}
+.btn-accent { background: var(--color-accent); color: #fff; }
+.btn-accent:hover { background: var(--color-accent-dark); }
+.btn-dark { background: var(--color-ink); color: #fff; }
+.btn-dark:hover { background: #2b2b2b; }
+.btn-outline { background: transparent; color: var(--color-ink); border-color: var(--color-ink); }
+.btn-outline:hover { background: var(--color-ink); color: #fff; }
+.btn-sm { min-height: 36px; padding: 0 16px; font-size: 14px; }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+
+/* Lenke i løpende tekst: svart tekst med aksent-understrek */
+a.link { color: var(--color-ink); text-decoration: underline; text-decoration-color: var(--color-accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+a.link:hover { text-decoration-color: var(--color-ink); }
+
+label.field-label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.input {
+  width: 100%; min-height: 46px; padding: 10px 14px; background: #fff; color: var(--color-ink);
+  border: 1.5px solid #8a8760; border-radius: 12px; font: inherit; font-size: 16px;
+}
+textarea.input { min-height: 120px; resize: vertical; }
+.input[aria-invalid="true"] { border-color: var(--color-err); border-width: 2px; }
+.input:disabled { background: #f0eed8; color: #6b6a5a; }
+.field-error { color: var(--color-err); font-size: 14px; margin-top: 6px; font-weight: 600; }
+.field-hint { color: var(--color-muted); font-size: 13px; margin-top: 4px; }
+.check { display: flex; gap: 10px; align-items: flex-start; }
+.check input { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--color-ink); flex-shrink: 0; }
+
+.status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--color-accent); margin-right: 8px; }
+.badge {
+  display: inline-flex; align-items: center; font-family: var(--font-mono); font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .06em; padding: 3px 10px; border-radius: 999px;
+  border: 1.5px solid var(--color-ink); background: #fff;
+}
+.badge-fill { background: var(--color-ink); color: #fff; }
+
+table.tbl { width: 100%; border-collapse: collapse; }
+table.tbl th { text-align: left; }
+table.tbl th, table.tbl td { padding: 12px 6px; border-bottom: 1px solid var(--color-line); vertical-align: top; }
+.skip-link { position: absolute; left: -9999px; top: 8px; background: #fff; color: #111; padding: 8px 14px; z-index: 100; border-radius: 8px; }
+.skip-link:focus { left: 8px; }
+
+/* Lange norske sammensetninger («EVENTFOTOGRAFERING») skal aldri sprenge bredden */
+.hero-title { font-size: clamp(22px, 6.3vw, 44px); overflow-wrap: anywhere; }
+@media (min-width: 1024px) { .hero-title { font-size: 42px; } }
