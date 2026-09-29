@@ -67,7 +67,11 @@ er klargjort (`vercel.json`, region `fra1` nær Supabase eu-central-1), men **ik
    Migrasjonen slår på Row Level Security uten policies på alle tabeller, slik at Supabase' åpne
    Data API ikke kan lese kundedata, tokens eller passordhasher med anon-nøkkelen.
    *Tips:* deler prosjektet database med andre apper, bruk et eget skjema (`?schema=kundepriser`).
-2. **Vercel → Environment Variables (Production):** `DATABASE_URL` (pooler), `DIRECT_URL`, `APP_SECRET`,
+2. **Vercel → Environment Variables (Production):** Med Supabase-integrasjonen koblet til prosjektet
+   dekkes databasen og bildelagringen automatisk: appen bruker `POSTGRES_PRISMA_URL`/`POSTGRES_URL`
+   hvis `DATABASE_URL` mangler, og `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` leveres av integrasjonen.
+   Det du selv må sette er `APP_SECRET` (Sensitive) og `APP_URL`. For migrasjoner lokalt bruker du
+   `POSTGRES_URL_NON_POOLING` som `DIRECT_URL`. Full liste: `DATABASE_URL` (pooler), `DIRECT_URL`, `APP_SECRET`,
    `APP_URL` (den offentlige adressen), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
    `SUPABASE_STORAGE_BUCKET`, `NOTIFY_EMAIL`. Marker nøkler og passord som *Sensitive*.
 3. **Vercel → Settings → Deployment Protection:** slå av *Vercel Authentication* for produksjon.
