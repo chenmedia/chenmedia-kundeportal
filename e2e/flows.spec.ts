@@ -23,7 +23,11 @@ test("kunde: viser pakker, velger pakke, sender forespørsel og admin ser den", 
   await expect(page.getByText(/^16\s000\skr$/)).toBeVisible();
   await expect(page.getByText("Inntil 20 høyoppløselige ferdig redigerte bilder")).toBeVisible();
 
+  // Skjemaet er skjult til man ber om det
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByLabel("Arrangementets navn eller type")).toBeHidden();
   await page.getByRole("button", { name: /Forespør – Medium event/ }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByLabel("Pakke", { exact: true })).toHaveValue("pkg_medium");
   await expect(page.locator("#foresporsel-heading")).toBeFocused();
 
@@ -118,6 +122,7 @@ test("admin: bytte av lenke gjør gammel lenke ugyldig og ny gyldig", async ({ p
 
 test("kunde med foreldet side får beskjed om ny versjon og beholder teksten", async ({ page, browser }) => {
   await page.goto(await obosLink());
+  await page.getByTestId("open-form").click();
   await page.getByLabel("Arrangementets navn eller type").fill("Foreldet test");
   await page.getByLabel("Dato", { exact: true }).fill("2099-07-01");
   await page.getByLabel("Sted", { exact: true }).fill("Bergen");
@@ -150,6 +155,7 @@ test("admin får varsel i nettsiden når en ny forespørsel kommer inn", async (
 
   const cust = await (await browser.newContext()).newPage();
   await cust.goto(await obosLink());
+  await cust.getByTestId("open-form").click();
   await cust.getByLabel("Pakke", { exact: true }).selectOption("other");
   await cust.getByLabel("Arrangementets navn eller type").fill("Varsel-test");
   await cust.getByLabel("Dato er ikke avklart").check();
@@ -199,4 +205,27 @@ test("admin laster opp bilde, publiserer, og kunden ser bildet via beskyttet rut
   expect((await cust.request.get(src!)).status()).toBe(200);
   expect((await cust.request.get(src!.replace(/^\/k\/[^/]+/, "/k/ugyldig-ugyldig-ugyldig-ugyldig"))).status()).toBe(404);
   expect((await cust.request.get("/admin/media/" + src!.split("/").pop())).status()).toBe(401);
+});
+
+test("skjemaet ligger bak knapp: Esc lukker, teksten beholdes, og flytende knapp vises ved scrolling", async ({ page }) => {
+  await page.goto(await obosLink());
+  const sticky = page.locator(".sticky-cta");
+  await expect(sticky).not.toHaveClass(/sticky-cta--on/);
+
+  await page.getByTestId("open-form").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator("#foresporsel-heading")).toBeFocused();
+  await page.getByLabel("Arrangementets navn eller type").fill("Beholdes ved lukking");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+
+  await page.getByTestId("open-form").click();
+  await expect(page.getByLabel("Arrangementets navn eller type")).toHaveValue("Beholdes ved lukking");
+  await page.getByRole("button", { name: "Lukk skjema" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
+  await expect(sticky).toHaveClass(/sticky-cta--on/);
+  await sticky.getByRole("button").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 });

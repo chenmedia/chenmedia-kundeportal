@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { inquiryInputSchema, OTHER_PACKAGE, formatCalendarDate, todayInOslo } from "@/lib/content";
-import { SELECT_EVENT } from "./SelectPackageButton";
+import { SELECT_EVENT } from "./form-events";
 
 interface Props {
   token?: string;
@@ -154,7 +154,7 @@ export function InquiryForm(props: Props) {
   return (
     <form onSubmit={onSubmit} noValidate aria-busy={sending}>
       <h2 id="foresporsel-heading" tabIndex={-1} className="display text-2xl md:text-3xl outline-none">Send et fotobehov</h2>
-      <p className="mt-2 text-muted">Det tar omtrent to minutter. Du trenger ikke oppgi bedrift, vi vet hvem du er.</p>
+      <p className="mt-2 text-muted">Det tar omtrent to minutter. Du trenger ikke oppgi bedrift, vi vet hvem du er. Lukker du skjemaet, beholdes teksten din.</p>
 
       {disabled && props.disabledReason && (
         <p role="note" className="mt-4 rounded-xl border-2 border-ink bg-cream px-4 py-3 text-sm font-semibold">{props.disabledReason}</p>

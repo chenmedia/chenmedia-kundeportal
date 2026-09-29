@@ -1,42 +1,24 @@
 "use client";
 
-export const SELECT_EVENT = "cm:select-package";
+import { openForm } from "./form-events";
+import { ArrowRight } from "./Icons";
 
-export function focusForm() {
-  const h = document.getElementById("foresporsel-heading");
-  if (h) {
-    h.scrollIntoView({ block: "start" });
-    h.focus({ preventScroll: true });
-  }
-}
-
-export function SelectPackageButton(props: {
-  packageId: string;
-  label: string;
-  ariaLabel: string;
-  disabled: boolean;
-  primary: boolean;
-}) {
+/** Knapp på pakkekort: åpner skjemaet med pakken valgt. */
+export function SelectPackageButton(props: { packageId: string; label: string; ariaLabel: string }) {
   return (
-    <button
-      type="button"
-      className={`btn ${props.primary ? "btn-accent" : "btn-outline"} w-full`}
-      aria-label={props.ariaLabel}
-      disabled={props.disabled}
-      onClick={() => {
-        window.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: props.packageId }));
-        focusForm();
-      }}
-    >
+    <button type="button" className="btn btn-outline w-full group" aria-label={props.ariaLabel} onClick={() => openForm(props.packageId)}>
       {props.label}
+      <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
     </button>
   );
 }
 
-export function ScrollToForm({ label, disabled }: { label: string; disabled: boolean }) {
+/** Generell knapp som åpner skjemaet. */
+export function OpenFormButton({ label, variant = "accent", testId }: { label: string; variant?: "accent" | "dark" | "outline"; testId?: string }) {
   return (
-    <button type="button" className="btn btn-accent" disabled={disabled} onClick={focusForm}>
-      {label} <span aria-hidden="true">→</span>
+    <button type="button" data-testid={testId} className={`btn btn-lg btn-${variant} group`} onClick={() => openForm()}>
+      {label}
+      <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
     </button>
   );
 }

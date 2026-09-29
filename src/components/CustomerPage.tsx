@@ -1,8 +1,11 @@
 import type { Content, PackageContent } from "@/lib/content";
 import { DEFAULT_CTA, DEFAULT_INTRO, formatAddonPrice, formatDate, formatPackagePrice } from "@/lib/content";
-import { Logo, Mark } from "./Logo";
+import { Logo } from "./Logo";
 import { InquiryForm } from "./InquiryForm";
-import { SelectPackageButton, ScrollToForm } from "./SelectPackageButton";
+import { OpenFormButton, SelectPackageButton } from "./SelectPackageButton";
+import { RequestDialog } from "./RequestDialog";
+import { StickyCta } from "./StickyCta";
+import { ArrowDown, CheckIcon } from "./Icons";
 
 export interface CustomerPageProps {
   customerName: string;
@@ -23,7 +26,7 @@ function Included({ p }: { p: PackageContent }) {
     <ul className="mt-6 space-y-3 text-[15px]">
       {items.map((t) => (
         <li key={t} className="flex gap-3">
-          <span aria-hidden="true" className="mt-[10px] h-[6px] w-[6px] rounded-full bg-ink shrink-0" />
+          <CheckIcon className="mt-[3px] h-[18px] w-[18px] shrink-0" />
           <span>{t}</span>
         </li>
       ))}
@@ -31,16 +34,19 @@ function Included({ p }: { p: PackageContent }) {
   );
 }
 
-function PackageCard({ p, disabled }: { p: PackageContent; disabled: boolean }) {
+function PackageCard({ p, index }: { p: PackageContent; index: number }) {
   const price = formatPackagePrice(p);
   return (
-    <li className="card p-6 md:p-7 flex flex-col">
-      <h3 className="display text-xl">{p.name}</h3>
-      <div className="mt-5">
+    <li className="card pkg-card p-6 md:p-7 flex flex-col">
+      <div className="flex items-start justify-between gap-4">
+        <h3 className="display text-xl">{p.name}</h3>
+        <span className="step-num text-muted" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+      </div>
+      <div className="mt-6 pt-6 hairline">
         <p className="eyebrow">{price.label}</p>
-        <p className="title text-4xl mt-1 whitespace-nowrap">{price.amount}</p>
-        <p className="text-sm text-muted mt-1">eks. mva.</p>
-        {p.priceNote && <p className="text-sm text-muted mt-2">{p.priceNote}</p>}
+        <p className="title text-[40px] leading-none mt-2 whitespace-nowrap">{price.amount}</p>
+        <p className="text-sm text-muted mt-2">eks. mva.</p>
+        {p.priceNote && <p className="text-sm text-muted mt-3">{p.priceNote}</p>}
       </div>
       {p.description && <p className="mt-6 text-[15px]">{p.description}</p>}
       <Included p={p} />
@@ -49,67 +55,96 @@ function PackageCard({ p, disabled }: { p: PackageContent; disabled: boolean }) 
           packageId={p.id}
           label={p.custom ? "Beskriv behovet ditt" : "Forespør denne pakken"}
           ariaLabel={`${p.custom ? "Beskriv behovet ditt" : "Forespør"} – ${p.name}`}
-          disabled={disabled}
-          primary={false}
         />
       </div>
     </li>
   );
 }
 
+const STEPS = [
+  { t: "Velg pakke", d: "Eller beskriv behovet ditt hvis du er usikker." },
+  { t: "Send forespørsel", d: "Det tar omtrent to minutter." },
+  { t: "Vi tar kontakt", d: "Kai avklarer tilgjengelighet og detaljer med deg." },
+];
+
 export function CustomerPage(props: CustomerPageProps) {
   const { content, customerName } = props;
-  const disabled = !props.token;
   const title = content.introTitle || `Eventfotografering for ${customerName}`;
   const hero = content.heroImageId ? props.mediaUrl(content.heroImageId) : null;
+  const cta = content.ctaLabel || DEFAULT_CTA;
 
   return (
     <div>
       <a href="#hovedinnhold" className="skip-link">Hopp til innhold</a>
       <header className="wrap flex items-center justify-between gap-4 py-6">
         <Logo height={40} />
-        <p className="eyebrow text-right">Avtale for <span className="text-ink">{customerName}</span></p>
+        <p className="eyebrow text-right hidden sm:block">Avtale for <span className="text-ink">{customerName}</span></p>
       </header>
 
       <main id="hovedinnhold">
         {/* Introduksjon */}
-        <section className="wrap grid gap-8 lg:gap-12 lg:grid-cols-[1.35fr_1fr] items-center pt-4 pb-12 md:pb-16" aria-labelledby="intro-title">
-          <div className="min-w-0">
-            <p className="eyebrow mb-4">Eventfotografering · {customerName}</p>
-            <h1 id="intro-title" className="display hero-title">{title}</h1>
-            <p className="ingress text-[17px] mt-6 max-w-[34rem]">{content.introText || DEFAULT_INTRO}</p>
-            <div className="mt-8">
-              <ScrollToForm label={content.ctaLabel || DEFAULT_CTA} disabled={disabled} />
+        <section id="hero" className="wrap pt-4 pb-10 md:pb-14" aria-labelledby="intro-title">
+          <div className="grid gap-10 lg:gap-14 lg:grid-cols-[1.35fr_1fr] items-center">
+            <div className="min-w-0">
+              <p className="eyebrow mb-5">Eventfotografering · {customerName}</p>
+              <h1 id="intro-title" className="display hero-title">{title}</h1>
+              <p className="ingress text-[17px] md:text-[18px] mt-6 max-w-[34rem]">{content.introText || DEFAULT_INTRO}</p>
+              <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
+                <OpenFormButton label={cta} testId="open-form" />
+                <a href="#pakker" className="link font-semibold inline-flex items-center gap-1.5">
+                  Se pakker og priser <ArrowDown className="h-4 w-4" />
+                </a>
+              </div>
+            </div>
+
+            <div className="relative aspect-[4/3] rounded-[28px] overflow-hidden border border-line bg-ink">
+              {hero ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={hero} alt={content.heroImageAlt || `Bilde fra et event fotografert av Chen Media for ${customerName}`} className="absolute inset-0 h-full w-full object-cover" />
+              ) : (
+                <div role="img" aria-label="Plassholder for eventbilde" className="absolute inset-0">
+                  {/* Krusedullen: stor og beskåret i hjørnet, 100 % hvit */}
+                  <div className="absolute -right-[16%] -top-[14%] w-[64%]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/brand/mark-white.png" alt="" aria-hidden="true" className="block h-auto w-full" />
+                  </div>
+                  <p className="eyebrow !text-white/70 absolute left-6 top-6">Chen Media · Foto &amp; video</p>
+                  <p className="display absolute left-6 bottom-6 text-white text-2xl md:text-3xl max-w-[12ch]">Vi fanger øyeblikkene</p>
+                </div>
+              )}
             </div>
           </div>
-          <div className="relative aspect-[4/3] rounded-[24px] overflow-hidden border border-line bg-paper">
-            {hero ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={hero} alt={content.heroImageAlt || `Bilde fra et event fotografert av Chen Media for ${customerName}`} className="absolute inset-0 h-full w-full object-cover" />
-            ) : (
-              <div className="absolute inset-0 grid place-items-center bg-ink" role="img" aria-label="Plassholder for eventbilde">
-                <Mark variant="white" height={120} />
-              </div>
-            )}
-          </div>
+
+          {/* Fakta */}
+          <dl className="mt-12 grid md:grid-cols-3 card overflow-hidden">
+            <div className="fact"><dt className="eyebrow">Avtale</dt><dd className="title text-lg mt-1">{content.agreementLabel || "Utkast"}</dd></div>
+            <div className="fact"><dt className="eyebrow">Priser</dt><dd className="title text-lg mt-1">Oppgitt eks. mva.</dd></div>
+            <div className="fact"><dt className="eyebrow">Kontaktperson</dt><dd className="title text-lg mt-1">{content.contactName || "Chen Media"}</dd></div>
+          </dl>
         </section>
 
         {/* Pakker */}
-        <section className="wrap pb-12 md:pb-16" aria-labelledby="pakker-title">
-          <h2 id="pakker-title" className="display text-2xl md:text-3xl">Pakker</h2>
-          <p className="text-muted mt-2">Alle priser er oppgitt eks. mva.</p>
-          <ul className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3">
-            {content.packages.map((p) => <PackageCard key={p.id} p={p} disabled={disabled} />)}
+        <section id="pakker" className="wrap py-10 md:py-14 scroll-mt-6" aria-labelledby="pakker-title">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="eyebrow mb-3">Deres avtalte pakker</p>
+              <h2 id="pakker-title" className="section-title">Velg pakke</h2>
+            </div>
+            <p className="text-muted max-w-sm text-[15px]">Alle priser er oppgitt eks. mva. Ingen forpliktelse før du har fått bekreftelse fra oss.</p>
+          </div>
+          <ul className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3 items-stretch">
+            {content.packages.map((p, i) => <PackageCard key={p.id} p={p} index={i} />)}
           </ul>
         </section>
 
         {/* Tillegg og praktisk */}
         {(content.addons.length > 0 || content.practical.length > 0) && (
-          <section className="wrap pb-12 md:pb-16 grid grid-cols-1 gap-5 md:grid-cols-5" aria-labelledby="tillegg-title">
+          <section className="wrap py-10 md:py-14 grid grid-cols-1 gap-5 md:grid-cols-5" aria-labelledby="tillegg-title">
             {content.addons.length > 0 && (
-              <div className="card min-w-0 p-5 md:p-7 md:col-span-3">
-                <h2 id="tillegg-title" className="display text-xl">Tillegg</h2>
-                <table className="tbl mt-4 text-[15px]">
+              <div className="card min-w-0 p-5 md:p-8 md:col-span-3">
+                <p className="eyebrow mb-3">Ved behov</p>
+                <h2 id="tillegg-title" className="section-title">Tillegg</h2>
+                <table className="tbl mt-5 text-[15px]">
                   <caption className="sr-only">Tillegg og priser eks. mva.</caption>
                   <thead className="sr-only"><tr><th>Tillegg</th><th>Pris</th></tr></thead>
                   <tbody>
@@ -127,35 +162,47 @@ export function CustomerPage(props: CustomerPageProps) {
               </div>
             )}
             {content.practical.length > 0 && (
-              <div className="card min-w-0 p-5 md:p-7 md:col-span-2">
-                <h2 className="display text-xl">Praktisk</h2>
-                <ul className="mt-4 space-y-3 text-[15px]">
+              <div className="min-w-0 p-5 md:p-8 md:col-span-2 rounded-[20px] bg-ink text-white on-dark">
+                <p className="eyebrow !text-white/70 mb-3">Godt å vite</p>
+                <h2 className="section-title">Praktisk</h2>
+                <ul className="mt-5 space-y-3 text-[15px]">
                   {content.practical.map((t) => (
                     <li key={t} className="flex gap-3">
-                      <span aria-hidden="true" className="mt-[10px] h-[6px] w-[6px] rounded-full bg-ink shrink-0" />
+                      <CheckIcon className="mt-[3px] h-[18px] w-[18px] shrink-0" />
                       <span>{t}</span>
                     </li>
                   ))}
                 </ul>
-                <p className="text-sm text-muted mt-5">
-                  Tillegg avklares i det endelige tilbudet. Skjemaet under beregner ingen totalsum.
-                </p>
+                <p className="text-sm text-white/75 mt-6">Tillegg avklares i det endelige tilbudet. Skjemaet beregner ingen totalsum.</p>
               </div>
             )}
           </section>
         )}
 
-        {/* Skjema */}
-        <section className="wrap pb-16 md:pb-24" aria-labelledby="foresporsel-heading">
+        {/* Slik går det til + oppfordring */}
+        <section className="wrap py-10 md:py-14" aria-labelledby="steg-title">
           <div className="card p-6 md:p-10">
-            <InquiryForm
-              token={props.token}
-              versionId={props.versionId}
-              packages={content.packages.map((p) => ({ id: p.id, name: p.name, custom: p.custom }))}
-              disabledReason={props.formDisabledReason}
-              emailConfigured={!!props.emailConfigured}
-              contactEmail={content.contactEmail}
-            />
+            <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] lg:gap-14 items-center">
+              <div>
+                <p className="eyebrow mb-3">Ingen hast?</p>
+                <h2 id="steg-title" className="section-title">Bruk siden som prisliste</h2>
+                <p className="ingress mt-4 text-[16px]">
+                  Ikke alle trenger å booke med en gang. Når behovet er der, sender du en forespørsel herfra, så slipper du å lete etter e-poster.
+                </p>
+                <div className="mt-7"><OpenFormButton label={cta} variant="dark" /></div>
+              </div>
+              <ol className="grid gap-4">
+                {STEPS.map((s, i) => (
+                  <li key={s.t} className="flex gap-5 items-start rounded-2xl bg-cream/60 border border-line p-5">
+                    <span className="step-num mt-1">{String(i + 1).padStart(2, "0")}</span>
+                    <div>
+                      <p className="title">{s.t}</p>
+                      <p className="text-[15px] text-muted mt-0.5">{s.d}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
         </section>
       </main>
@@ -190,6 +237,19 @@ export function CustomerPage(props: CustomerPageProps) {
           </div>
         </div>
       </footer>
+
+      <StickyCta label={cta} />
+
+      <RequestDialog customerName={customerName}>
+        <InquiryForm
+          token={props.token}
+          versionId={props.versionId}
+          packages={content.packages.map((p) => ({ id: p.id, name: p.name, custom: p.custom }))}
+          disabledReason={props.formDisabledReason}
+          emailConfigured={!!props.emailConfigured}
+          contactEmail={content.contactEmail}
+        />
+      </RequestDialog>
     </div>
   );
 }
