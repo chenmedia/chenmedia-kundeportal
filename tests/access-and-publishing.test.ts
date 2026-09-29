@@ -110,3 +110,15 @@ describe("publiseringsversjoner", () => {
     expect((await resolvePublished(token))!.customerId).toBe(customer.id);
   });
 });
+
+describe("samtidig publisering", () => {
+  it("fire samtidige publiseringer gir fire unike versjonsnumre og siste er aktiv", async () => {
+    const { customer } = await makePublished("Race AS"); // v1
+    const results = await Promise.all(Array.from({ length: 4 }, () => publish(customer.id)));
+    expect(results.every((r) => r.ok)).toBe(true);
+    const numbers = (await db.publishedVersion.findMany({ where: { customerId: customer.id }, orderBy: { number: "asc" } })).map((v) => v.number);
+    expect(numbers).toEqual([1, 2, 3, 4, 5]);
+    const c = await db.customer.findUniqueOrThrow({ where: { id: customer.id }, include: { currentVersion: true } });
+    expect(c.currentVersion).not.toBeNull();
+  });
+});
