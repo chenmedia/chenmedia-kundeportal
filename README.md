@@ -77,8 +77,15 @@ er klargjort (`vercel.json`, region `lhr1` (London) nær Supabase-prosjektet i e
 3. **Vercel → Settings → Deployment Protection:** slå av *Vercel Authentication* for produksjon.
    Ellers møter kundene en Vercel-innlogging i stedet for prislisten. Kundelenken (32 byte tilfeldig
    token) er tilgangsbeskyttelsen. Innhold beskyttes av `noindex` og `no-store`.
-4. **Første administrator:** lokalt, mot produksjonsdatabasen:
-   `DATABASE_URL=<direct> DIRECT_URL=<direct> ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run admin:create`.
+4. **Administratorer og innlogging:** I drift (når `SUPABASE_URL` og en publisert/anon-nøkkel finnes) sjekkes
+   passordet hos **Supabase Auth**. Hvem som er administrator bestemmes av tabellen `AdminUser`
+   (godkjenningsliste): en Supabase-bruker uten rad der får ingen tilgang. Legg til en administrator ved å
+   opprette brukeren i Supabase (Authentication → Users) og kjøre
+   `DATABASE_URL=<direct> DIRECT_URL=<direct> ADMIN_EMAIL=... npm run admin:create` (eller sette inn raden i
+   `AdminUser`). **Slå av offentlig registrering** i Supabase (Authentication → Sign In / Providers → «Allow new
+   users to sign up»). Passordendring og tilbakestilling gjøres i Supabase-dashbordet. Appen har ingen egen
+   glemt-passord-side, og Supabase' innebygde e-post er begrenset til testing.
+   Uten Supabase-oppsett (lokal utvikling) brukes passordhash i `AdminUser` som før.
    Seed (`npm run db:seed`) legger inn OBOS. Kjør den bare hvis du vil ha demo-kunden i produksjon.
 5. Koble GitHub-repoet til Vercel-prosjektet og deploy.
 

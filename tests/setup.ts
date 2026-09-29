@@ -9,3 +9,4 @@ process.env.STORAGE_DIR = "./storage-test";
 process.env.NOTIFY_EMAIL = "team@example.com";
 delete process.env.SUPABASE_URL;
 delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+for (const k of ["SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]) delete process.env[k];

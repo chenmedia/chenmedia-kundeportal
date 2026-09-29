@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import crypto from "node:crypto";
 import { db } from "./db";
 import { sha256, verifyPassword } from "./crypto";
+import { supabaseAuthConfigured, verifyWithSupabase } from "./supabase-auth";
 export { createAdmin } from "./admin-core";
 import { allow, clientIp, reset } from "./rate-limit";
 
@@ -14,8 +15,14 @@ export async function login(email: string, password: string, ip: string) {
   const key = `login:${ip}:${email.toLowerCase()}`;
   if (!(await allow(key, 8, 15 * 60))) return { ok: false as const, error: "rate" as const };
   const user = await db.adminUser.findUnique({ where: { email: email.toLowerCase() } });
-  // Alltid kjør hash-sammenligning for å unngå tidsforskjell mellom kjent/ukjent bruker.
-  const ok = user ? await verifyPassword(password, user.passwordHash) : (await verifyPassword(password, "scrypt$AAAA$AAAA"), false);
+  let ok: boolean;
+  if (supabaseAuthConfigured()) {
+    // Legitimasjon sjekkes hos Supabase Auth. Tilgang krever i tillegg at e-posten står i AdminUser.
+    ok = (await verifyWithSupabase(email.toLowerCase(), password)).ok && !!user;
+  } else {
+    // Lokal utvikling/test: passordhash i AdminUser. Alltid kjør hash-sammenligning (jevn responstid).
+    ok = user?.passwordHash ? await verifyPassword(password, user.passwordHash) : (await verifyPassword(password, "scrypt$AAAA$AAAA"), false);
+  }
   if (!user || !ok) return { ok: false as const, error: "invalid" as const };
   await reset(key);
   const token = crypto.randomBytes(32).toString("base64url");

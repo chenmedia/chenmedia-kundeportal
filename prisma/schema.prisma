@@ -12,7 +12,7 @@ datasource db {
 model AdminUser {
   id           String         @id @default(cuid())
   email        String         @unique
-  passwordHash String
+  passwordHash String? // null når innlogging skjer via Supabase Auth
   createdAt    DateTime       @default(now())
   sessions     AdminSession[]
 }

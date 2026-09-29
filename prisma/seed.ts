@@ -1,11 +1,15 @@
 import { db } from "../src/server/db";
 import { createCustomer, publish, getRawToken } from "../src/server/customers";
+import { supabaseAuthConfigured } from "../src/server/supabase-auth";
 import { obosContent } from "../src/server/seed-data";
 import { createAdmin } from "../src/server/admin-core";
 import { submitInquiry } from "../src/server/inquiries";
 
 async function main() {
-  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+  if (process.env.ADMIN_EMAIL && supabaseAuthConfigured()) {
+    await createAdmin(process.env.ADMIN_EMAIL);
+    console.log(`Administrator godkjent: ${process.env.ADMIN_EMAIL} (innlogging via Supabase Auth)`);
+  } else if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
     await createAdmin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
     console.log(`Administrator klar: ${process.env.ADMIN_EMAIL}`);
   } else {
