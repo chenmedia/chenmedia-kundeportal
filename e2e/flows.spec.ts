@@ -168,3 +168,35 @@ test("admin får varsel i nettsiden når en ny forespørsel kommer inn", async (
   await toast.getByRole("link", { name: "Åpne" }).click();
   await expect(page.getByRole("heading", { name: "Varsel-test" })).toBeVisible();
 });
+
+test("admin laster opp bilde, publiserer, og kunden ser bildet via beskyttet rute", async ({ page, browser }) => {
+  const link = await obosLink();
+  await adminLogin(page);
+  await page.getByRole("link", { name: "Åpne OBOS" }).click();
+
+  // Ugyldig fil avvises
+  await page.getByLabel("Last opp bilde").setInputFiles({ name: "x.png", mimeType: "image/png", buffer: Buffer.from("<script>alert(1)</script>") });
+  await expect(page.getByRole("alert").filter({ hasText: /gyldig bilde/ })).toBeVisible({ timeout: 20_000 });
+
+  // Gyldig PNG godtas
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  await page.getByLabel("Last opp bilde").setInputFiles({ name: "event.png", mimeType: "image/png", buffer: png });
+  await expect(page.getByLabel("Alternativtekst")).toBeVisible({ timeout: 20_000 });
+  await page.getByLabel("Alternativtekst").fill("Gjester på en sommerfest");
+  await page.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Publiser" }).click();
+  await expect(page.getByText("Publisert. Kundelenken viser nå den nye versjonen.")).toBeVisible();
+
+  const cust = await (await browser.newContext()).newPage();
+  await cust.goto(link);
+  const img = cust.getByRole("img", { name: "Gjester på en sommerfest" });
+  await expect(img).toBeVisible();
+  const src = await img.getAttribute("src");
+  expect(src).toMatch(/^\/k\/[^/]+\/media\//);
+  // Riktig innhold via kundens lenke, men ikke uten gyldig token og ikke via admin-ruten
+  expect((await cust.request.get(src!)).status()).toBe(200);
+  expect((await cust.request.get(src!.replace(/^\/k\/[^/]+/, "/k/ugyldig-ugyldig-ugyldig-ugyldig"))).status()).toBe(404);
+  expect((await cust.request.get("/admin/media/" + src!.split("/").pop())).status()).toBe(401);
+});

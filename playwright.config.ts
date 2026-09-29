@@ -1,8 +1,10 @@
 import { defineConfig } from "@playwright/test";
+import { E2E_DB_URL } from "./tests/db-reset";
 
 const PORT = 3100;
 export const E2E_ENV = {
-  DATABASE_URL: "file:./e2e.db?connection_limit=1",
+  DATABASE_URL: E2E_DB_URL,
+  DIRECT_URL: E2E_DB_URL,
   APP_SECRET: "e2e-secret-e2e-secret-e2e-secret-1",
   APP_URL: `http://localhost:${PORT}`,
   STORAGE_DIR: "./storage-e2e",

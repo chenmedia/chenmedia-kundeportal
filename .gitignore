@@ -15,3 +15,4 @@ storage-test
 prisma/test.db*
 storage-e2e
 prisma/e2e.db*
+/storage-test

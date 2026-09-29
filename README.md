@@ -8,7 +8,7 @@ Status: **beta / første fungerende utkast. Ikke produksjonsklar** (se «Før dr
 
 ## Teknologi og versjoner
 
-Next.js 15.5 (App Router) · React 19 · TypeScript 5.9 · Tailwind CSS 4 · Prisma 6.19 + SQLite ·
+Next.js 15.5 (App Router) · React 19 · TypeScript 5.9 · Tailwind CSS 4 · Prisma 6.19 + Postgres (Supabase) ·
 Zod 3 · Vitest 3 · Playwright 1.63 · Node 22. Versjonene er låst (`package.json` + `package-lock.json`).
 
 Design følger *Chen Media Brandguideline V1*: Chen Svart `#111111`, Chen Krem `#FBF8D0`, hvit, én
@@ -18,12 +18,16 @@ til titler, Open Sans til brødtekst, Merriweather til ingress, Space Mono til e
 Logo og krusedull (`public/brand/`) er klippet ut av brandguiden som PNG. **Bytt gjerne med
 originale vektorfiler.**
 
-## Kom i gang
+## Kom i gang (lokalt)
+
+Trenger en Postgres-database. Har du Docker: `docker run -d -p 5433:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:16`
+og `createdb -h localhost -p 5433 -U postgres kundepriser_dev` (og tilsvarende `kundepriser_test`, `kundepriser_e2e`
+for testene). Annen Postgres går også: sett `DATABASE_URL` / `DIRECT_URL` i `.env`.
 
 ```bash
 npm install
 cp .env.example .env        # sett ADMIN_PASSWORD (min. 12 tegn) og gjerne APP_SECRET
-npm run db:setup            # oppretter SQLite-databasen og seeder OBOS (+ administrator)
+npm run db:setup            # kjører migrasjoner og seeder OBOS (+ administrator)
 npm run dev                 # http://localhost:3000
 ```
 
@@ -34,19 +38,49 @@ npm run dev                 # http://localhost:3000
 - **Seed** kan kjøres flere ganger uten duplikater. OBOS-innholdet er de eksakte tallene fra
   spesifikasjonen (Lite 6 000 kr, Medium 10 000 kr, Stort fra 16 000 kr, tillegg og praktisk info).
   To tydelig merkede eksempelforespørsler (`example.com`) legges inn når `SEED_DEMO_INQUIRIES=1`.
+- **Bilder lokalt** lagres på disk i `STORAGE_DIR`. Med `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
+  satt brukes Supabase Storage i stedet (samme kode som i drift).
 
 ## Miljøvariabler
 
 | Variabel | Formål |
 |---|---|
-| `DATABASE_URL` | SQLite, f.eks. `file:./dev.db?connection_limit=1` (sti relativ til `prisma/`). `connection_limit=1` anbefales for SQLite. |
+| `DATABASE_URL` | Postgres. I drift: Supabase **pooler**-adressen (port 6543) med `?pgbouncer=true&connection_limit=1`. |
+| `DIRECT_URL` | Direkte Postgres-adresse (port 5432). Brukes til migrasjoner. |
 | `APP_SECRET` | Krypterer kundelenker som lagres for «Kopier lenke». **Påkrevd i produksjon** (min. 16 tegn). Byttes den, kan gamle lenker ikke vises (generer ny lenke). |
 | `APP_URL` | Offentlig adresse, brukes til å bygge kundelenker. |
-| `STORAGE_DIR` | Mappe for opplastede bilder (utenfor `public/`). |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Bildelagring i Supabase Storage (privat bucket, standard `kundeportal-media`). Service-nøkkelen brukes bare på serveren og må aldri eksponeres i nettleseren. |
+| `STORAGE_DIR` | Kun lokal utvikling uten Supabase. Virker ikke på Vercel. |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Brukes av seed / `admin:create`. Ingen hardkodet passord finnes. |
 | `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` | Aktiverer ekte e-post via Resend. Tomt = lokal utboks. |
 | `NOTIFY_EMAIL` | Mottaker av varsel om nye forespørsler (faller ellers tilbake til kontakt-e-posten på kundesiden). |
 | `SEED_DEMO_INQUIRIES` | `1` legger inn to eksempelforespørsler ved seed. |
+
+## Vercel + Supabase
+
+Vercel har ingen varig disk, derfor brukes Supabase for data (Postgres) og bilder (Storage). Appen
+er klargjort (`vercel.json`, region `fra1` nær Supabase eu-central-1), men **ikke deployet**.
+
+1. **Supabase:** bruk et aktivt prosjekt. Kjør migrasjonene mot **DIRECT_URL**:
+   `DATABASE_URL=<direct> DIRECT_URL=<direct> npm run db:migrate`. Kjør deretter
+   `supabase/setup-storage.sql` i SQL Editor (oppretter den private bucketen).
+   Migrasjonen slår på Row Level Security uten policies på alle tabeller, slik at Supabase' åpne
+   Data API ikke kan lese kundedata, tokens eller passordhasher med anon-nøkkelen.
+   *Tips:* deler prosjektet database med andre apper, bruk et eget skjema (`?schema=kundepriser`).
+2. **Vercel → Environment Variables (Production):** `DATABASE_URL` (pooler), `DIRECT_URL`, `APP_SECRET`,
+   `APP_URL` (den offentlige adressen), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `SUPABASE_STORAGE_BUCKET`, `NOTIFY_EMAIL`. Marker nøkler og passord som *Sensitive*.
+3. **Vercel → Settings → Deployment Protection:** slå av *Vercel Authentication* for produksjon.
+   Ellers møter kundene en Vercel-innlogging i stedet for prislisten. Kundelenken (32 byte tilfeldig
+   token) er tilgangsbeskyttelsen. Innhold beskyttes av `noindex` og `no-store`.
+4. **Første administrator:** lokalt, mot produksjonsdatabasen:
+   `DATABASE_URL=<direct> DIRECT_URL=<direct> ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run admin:create`.
+   Seed (`npm run db:seed`) legger inn OBOS. Kjør den bare hvis du vil ha demo-kunden i produksjon.
+5. Koble GitHub-repoet til Vercel-prosjektet og deploy.
+
+Bilder lastes opp direkte fra nettleseren til Supabase Storage med en kortlevd signert URL (Vercel
+tillater bare ca. 4,5 MB gjennom en funksjon). Serveren validerer filformatet etterpå og sletter ugyldige
+filer. Kunder får bildet via en tilgangskontrollert rute som videresender til en signert URL på 60 sekunder.
 
 ## Slik fungerer det
 
@@ -79,16 +113,20 @@ npm run dev                 # http://localhost:3000
 ```bash
 npm run typecheck   # tsc
 npm run lint        # eslint
-npm test            # Vitest: tilgangskontroll, versjoner, prisøyeblikk, doble innsendinger, e-post, bilder
+npm test            # Vitest (Postgres *_test-database): tilgangskontroll, versjoner, prisøyeblikk,
+                    # doble innsendinger, e-post, bildevalidering og lagringsadapter
 npm run build       # produksjonsbygg
-# E2E (Playwright). Bruker egen database og port 3100:
+# E2E (Playwright). Bruker databasen *_e2e og port 3100:
 CHROMIUM_PATH=/sti/til/chromium npx playwright test   # utelat CHROMIUM_PATH hvis `npx playwright install chromium` er kjørt
 ```
 
 ## Kjente begrensninger (beta)
 
 - Én administratorrolle, ingen passordtilbakestilling (bruk `npm run admin:create`).
-- Kun ett eventbilde per kundeside. Opplastede filer fjernes ikke fra disk når de ikke lenger brukes.
+- Kun ett eventbilde per kundeside. Opplastede filer fjernes ikke fra lagringen når de ikke lenger brukes.
+- **Supabase Storage-integrasjonen er testet mot mockede svar, ikke mot et levende prosjekt.**
+  Prøv bildeopplasting i et forhåndsvisningsmiljø før kunder får lenker.
+- Testene nullstiller databasene `*_test` og `*_e2e` og nekter å røre andre databaser.
 - Rate limiting bruker `x-forwarded-for`, som bare er pålitelig bak en proxy du kontrollerer.
 - E-post er bare testet mot mockede svar. **Ekte levering via Resend er ikke verifisert.**
 - Ingen automatisk gjenoppretting av gamle versjoner (kopier manuelt inn i utkastet).
@@ -100,9 +138,9 @@ CHROMIUM_PATH=/sti/til/chromium npx playwright test   # utelat CHROMIUM_PATH hvi
 Dette må avklares og verifiseres før kunder får lenker:
 
 1. **Faktisk e-postlevering** (avsenderdomene med SPF/DKIM, `RESEND_API_KEY`, test mot ekte innboks).
-2. **HTTPS** og riktig `APP_URL`. Sett `APP_SECRET` og ta vare på den.
-3. **Varig lagring og sikkerhetskopi** av både SQLite-filen og `STORAGE_DIR`, eller flytt til en
-   driftsdatabase/objektlagring (Prisma-skjema og lagringsfunksjonene er isolert for dette).
-4. Hosting-plattform (ikke valgt). Fungerer overalt der en Node-prosess har persistent disk.
-5. Ønsket tilgangsnivå: kundelenken er en delbar nøkkel. Alle med lenken ser prisene.
-6. Gjennomgang av personverntekst og eventuell slettefrist (ikke oppfunnet her).
+   Inntil videre gir appen varsling i nettsiden (teller, melding og fanetittel) for administrator.
+2. **Supabase og Vercel satt opp** som beskrevet over, inkludert avskrudd Vercel Authentication og
+   verifisert bildeopplasting mot ekte Storage.
+3. **Sikkerhetskopi:** sjekk Supabase-planens backup/PITR for databasen. Storage-filer sikkerhetskopieres ikke automatisk.
+4. Ønsket tilgangsnivå: kundelenken er en delbar nøkkel. Alle med lenken ser prisene.
+5. Gjennomgang av personverntekst og eventuell slettefrist (ikke oppfunnet her).

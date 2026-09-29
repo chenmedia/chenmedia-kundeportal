@@ -10,7 +10,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const query = (q ?? "").trim();
   const [customers, newInquiries, failedJobs, newCounts] = await Promise.all([
     db.customer.findMany({
-      where: query ? { name: { contains: query } } : undefined,
+      where: query ? { name: { contains: query, mode: "insensitive" } } : undefined,
       orderBy: { name: "asc" },
       include: { currentVersion: true },
     }),

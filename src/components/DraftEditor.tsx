@@ -116,15 +116,30 @@ export function DraftEditor(props: {
 
   async function upload(file: File) {
     setUploading(true); setUploadErr("");
-    const fd = new FormData();
-    fd.set("file", file); fd.set("customerId", props.customerId);
     try {
-      const res = await fetch("/api/admin/media", { method: "POST", body: fd });
-      const d = await res.json();
-      if (d.ok) {
-        setAssets((a) => [{ id: d.id, name: file.name, width: 0, height: 0 }, ...a]);
-        patch({ heroImageId: d.id });
-      } else setUploadErr(d.error ?? "Opplastingen feilet.");
+      if (file.size > 10 * 1024 * 1024) { setUploadErr("Filen er større enn 10 MB."); return; }
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setUploadErr("Bare JPEG, PNG og WebP er tillatt."); return; }
+      const prep = await (await fetch("/api/admin/media/prepare", { method: "POST" })).json();
+      if (!prep.ok) { setUploadErr(prep.error ?? "Opplastingen feilet."); return; }
+      // Lokalt: rå PUT til egen rute. Drift: signert opplasting rett til Supabase Storage.
+      let put: Response;
+      if (prep.kind === "local") {
+        put = await fetch(prep.uploadUrl, { method: "PUT", body: file });
+      } else {
+        const fd = new FormData();
+        fd.set("cacheControl", "3600");
+        fd.set("", file);
+        put = await fetch(prep.uploadUrl, { method: "PUT", body: fd });
+      }
+      if (!put.ok) { setUploadErr("Opplastingen feilet. Prøv igjen."); return; }
+      const done = await (await fetch("/api/admin/media/complete", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: props.customerId, key: prep.key, filename: file.name }),
+      })).json();
+      if (done.ok) {
+        setAssets((a) => [{ id: done.id, name: file.name, width: 0, height: 0 }, ...a]);
+        patch({ heroImageId: done.id });
+      } else setUploadErr(done.error ?? "Opplastingen feilet.");
     } catch { setUploadErr("Opplastingen feilet. Prøv igjen."); }
     finally { setUploading(false); }
   }
