@@ -38,8 +38,14 @@ export async function createCustomerAction(_prev: ActionState, fd: FormData): Pr
   await requireAdmin();
   const name = String(fd.get("name") ?? "").trim();
   if (name.length < 2) return { error: "Skriv kundenavn (minst 2 tegn)." };
-  const c = await createCustomer(name);
-  redirect(`/admin/kunder/${c.id}`);
+  let id: string;
+  try {
+    id = (await createCustomer(name)).id;
+  } catch (e) {
+    const missingSecret = e instanceof Error && e.message.includes("APP_SECRET");
+    return { error: missingSecret ? "Serveren mangler APP_SECRET. Sett den i Vercel og redeploy." : "Kunne ikke opprette kunden. Prøv igjen." };
+  }
+  redirect(`/admin/kunder/${id}`);
 }
 
 export async function saveDraftAction(customerId: string, name: string, contentJson: string): Promise<ActionState> {
@@ -77,7 +83,11 @@ export async function publishAction(customerId: string): Promise<ActionState> {
 
 export async function rotateTokenAction(customerId: string): Promise<ActionState> {
   await requireAdmin();
-  await rotateToken(customerId);
+  try {
+    await rotateToken(customerId);
+  } catch {
+    return { error: "Kunne ikke generere ny lenke. Sjekk at APP_SECRET er satt." };
+  }
   revalidatePath(`/admin/kunder/${customerId}`);
   return { ok: true };
 }
