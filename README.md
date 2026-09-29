@@ -155,3 +155,11 @@ Dette må avklares og verifiseres før kunder får lenker:
 3. **Sikkerhetskopi:** sjekk Supabase-planens backup/PITR for databasen. Storage-filer sikkerhetskopieres ikke automatisk.
 4. Ønsket tilgangsnivå: kundelenken er en delbar nøkkel. Alle med lenken ser prisene.
 5. Gjennomgang av personverntekst og eventuell slettefrist (ikke oppfunnet her).
+
+## Arbeidsflyt
+
+- `main` er produksjon (Vercel publiserer bare herfra; alle andre branches får kun forhåndsvisning).
+- Endringer gjøres på en egen branch og slås sammen til `main` via pull request. Vercel lager en egen
+  forhåndsvisnings-URL for hver branch/PR, som kan sjekkes før kundene ser endringen.
+- Databaseendringer (nye filer i `prisma/migrations/`) må kjøres mot Supabase **før** koden som trenger dem
+  slås sammen. Se «Vercel + Supabase» over.
