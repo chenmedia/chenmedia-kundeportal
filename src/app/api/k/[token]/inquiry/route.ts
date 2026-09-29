@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { inquiryInputSchema } from "@/lib/content";
+import { inquiryInputSchema } from "@/lib/inquiry";
 import { submitInquiry } from "@/server/inquiries";
 import { allow, clientIp } from "@/server/rate-limit";
 import { sameOrigin } from "@/server/admin-auth";

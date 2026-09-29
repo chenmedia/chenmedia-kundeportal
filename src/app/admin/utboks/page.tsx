@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { db } from "@/server/db";
+import { recentEmailJobs } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
-import { formatDateTime } from "@/lib/content";
+import { formatDateTime } from "@/lib/format";
 import { emailConfigured } from "@/server/email";
 import { EMAIL_STATUS } from "@/components/AdminBits";
 
 export default async function Outbox() {
   await requireAdmin();
-  const jobs = await db.emailJob.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { inquiry: { include: { customer: true } } } });
+  const jobs = await recentEmailJobs();
   return (
     <div className="grid gap-6">
       <h1 className="display text-3xl">E-postutboks</h1>

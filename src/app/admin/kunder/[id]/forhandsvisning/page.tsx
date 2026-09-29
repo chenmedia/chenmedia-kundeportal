@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/server/db";
+import { customerWithDraft } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
 import { parseContent, emptyContent } from "@/lib/content";
 import { CustomerPage } from "@/components/CustomerPage";
@@ -8,7 +8,7 @@ import { CustomerPage } from "@/components/CustomerPage";
 export default async function Preview({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
   const { id } = await params;
-  const c = await db.customer.findUnique({ where: { id }, include: { draft: true } });
+  const c = await customerWithDraft(id);
   if (!c) notFound();
   const content = c.draft ? parseContent(c.draft.content) : emptyContent();
   return (
