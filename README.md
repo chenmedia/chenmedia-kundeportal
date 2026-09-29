@@ -59,6 +59,10 @@ npm run dev                 # http://localhost:3000
   (409), siden hentes på nytt, teksten beholdes i minnet, og kunden må bekrefte gjennomgang.
 - **Doble innsendinger:** hver innsending har en engangsnøkkel (unik i databasen). Forespørsel og
   begge e-postjobber lagres i én atomisk skriving.
+- **Varsling i nettsiden (midlertidig):** så lenge e-postleverandør ikke er koblet på, får innlogget
+  administrator en teller i menyen («Forespørsler 2»), en melding nederst til høyre når en ny forespørsel
+  kommer inn (kontrolleres hvert 15. sekund og ved fokus), og antallet i fanetittelen. Dette fungerer bare
+  mens administrasjonen er åpen i en nettleser. Nye forespørsler vises også øverst på kundeoversikten.
 - **E-post:** utskiftbar leverandøradapter (`src/server/email.ts`, Resend støttes). Uten leverandør
   havner e-postene i **E-postutboksen** (`/admin/utboks`, kun innlogget), merket
   «Lokal forhåndsvisning – ikke sendt». Feilede utsendinger kan prøves på nytt fra forespørselen.

@@ -143,3 +143,28 @@ test("kunde med foreldet side får beskjed om ny versjon og beholder teksten", a
   await page.getByRole("button", { name: "Send forespørsel" }).click();
   await expect(page.getByText("Takk! Vi har mottatt forespørselen din.")).toBeVisible();
 });
+
+test("admin får varsel i nettsiden når en ny forespørsel kommer inn", async ({ page, browser }) => {
+  await adminLogin(page);
+  const before = await page.getByTestId("new-count").count() ? Number(((await page.getByTestId("new-count").textContent()) ?? "0").replace(/\D/g, "")) : 0;
+
+  const cust = await (await browser.newContext()).newPage();
+  await cust.goto(await obosLink());
+  await cust.getByLabel("Pakke", { exact: true }).selectOption("other");
+  await cust.getByLabel("Arrangementets navn eller type").fill("Varsel-test");
+  await cust.getByLabel("Dato er ikke avklart").check();
+  await cust.getByLabel("Sted er ikke avklart").check();
+  await cust.getByLabel("Beskrivelse av behovet").fill("Tester varsling i nettsiden.");
+  await cust.getByLabel("Kontaktperson").fill("Varsel Test");
+  await cust.getByLabel("E-post", { exact: true }).fill("varsel@example.com");
+  await cust.getByRole("button", { name: "Send forespørsel" }).click();
+  await expect(cust.getByText("Takk! Vi har mottatt forespørselen din.")).toBeVisible();
+
+  // Administratoren ser meldingen uten å laste siden på nytt
+  const toast = page.getByTestId("inquiry-toast").filter({ hasText: "Varsel-test" });
+  await expect(toast).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("new-count")).toContainText(String(before + 1));
+  await expect(page).toHaveTitle(new RegExp(`^\\(${before + 1}\\)`));
+  await toast.getByRole("link", { name: "Åpne" }).click();
+  await expect(page.getByRole("heading", { name: "Varsel-test" })).toBeVisible();
+});
