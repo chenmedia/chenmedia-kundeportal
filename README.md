@@ -119,6 +119,25 @@ filer. Kunder får bildet via en tilgangskontrollert rute som videresender til e
   begrensning av innloggingsforsøk og skjemainnsending, honeypot-felt, `Referrer-Policy: no-referrer`,
   `Cache-Control: private, no-store` og `noindex`. Ingen analyse eller sporing.
 
+## Preview-miljø (egen database)
+
+Forhåndsvisninger (alle branches unntatt `main`) skal **ikke** bruke produksjonsdatabasen. De har et eget
+Supabase-testprosjekt, `supabase-kundeportal-preview` (eu-west-2), med samme skjema, RLS og private bucket.
+
+**Oppsett i Vercel (én gang):**
+1. Supabase-integrasjonen fyller ut variabler for både Preview og Production. Begrens den til
+   *Production* (Vercel → Integrations → Supabase → Manage → prosjektet → velg bare Production), slik at
+   Preview ikke får produksjonsnøklene.
+2. Sett disse for **Preview** (Settings → Environment Variables), med verdier fra Supabase-prosjektet
+   `supabase-kundeportal-preview` (Connect / Project Settings → API):
+   `DATABASE_URL` (pooler, port 6543), `DIRECT_URL` (direkte, port 5432), `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY` (Sensitive), `SUPABASE_PUBLISHABLE_KEY`, og en egen `APP_SECRET` (Sensitive).
+3. Opprett administratorbrukeren i **preview-prosjektets** Authentication → Users. E-posten står allerede
+   på godkjenningslisten (`AdminUser`).
+
+**Migrasjoner** må kjøres mot *begge* prosjektene (preview først, så produksjon) før koden slås sammen.
+Kjør `npm run db:migrate` med `DATABASE_URL`/`DIRECT_URL` satt til det aktuelle prosjektets direkte adresse.
+
 ## Tester og kontroller
 
 ```bash
