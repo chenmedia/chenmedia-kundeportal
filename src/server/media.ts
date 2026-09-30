@@ -1,10 +1,14 @@
 import crypto from "node:crypto";
+import sharp from "sharp";
 import { imageSize } from "image-size";
+import { logError } from "./log";
 import { db } from "./db";
 import { KEY_RE, getStore } from "./storage";
 
 export const MAX_UPLOAD = 10 * 1024 * 1024;
 const HEADER_BYTES = 128 * 1024;
+/** Lengste side på lagret bilde. Et heltoppbilde trenger aldri mer enn dette. */
+export const MAX_DIMENSION = 1600;
 const ALLOWED: Record<string, string> = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
 
 export type UploadResult = { ok: true; id: string } | { ok: false; error: string };
@@ -45,10 +49,33 @@ export async function completeUpload(customerId: string, key: string, originalNa
   if (await db.mediaAsset.findFirst({ where: { storageKey: key, customerId: { not: customerId } } })) {
     return { ok: false, error: "Ugyldig opplasting." };
   }
+  // Skaler ned og konverter til WebP. Fjerner også metadata (EXIF, inkl. GPS-posisjon) og retter opp rotasjon.
+  const original = await store.read(key);
+  if (!original) return fail("Filen ble ikke funnet etter opplasting.");
+  let processed: { data: Buffer; width: number; height: number };
+  try {
+    const { data, info: out } = await sharp(original, { failOn: "error", limitInputPixels: 100_000_000 })
+      .rotate()
+      .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer({ resolveWithObject: true });
+    processed = { data, width: out.width, height: out.height };
+  } catch (e) {
+    logError("media.process", e);
+    return fail("Kunne ikke behandle bildet. Prøv en annen fil (JPEG, PNG eller WebP).");
+  }
+  const finalKey = newStorageKey();
+  try {
+    await store.put(finalKey, processed.data, "image/webp");
+  } catch (e) {
+    logError("media.store", e);
+    return fail("Kunne ikke lagre bildet. Prøv igjen.");
+  }
+  await store.remove(key); // originalen beholdes ikke
   const asset = await db.mediaAsset.create({
     data: {
-      customerId, storageKey: key, originalName: originalName.slice(0, 200).replace(/[^\w.\- æøåÆØÅ]/g, "_"),
-      mimeType: mime, width: info.width, height: info.height,
+      customerId, storageKey: finalKey, originalName: originalName.slice(0, 200).replace(/[^\w.\- æøåÆØÅ]/g, "_"),
+      mimeType: "image/webp", width: processed.width, height: processed.height,
     },
   });
   return { ok: true, id: asset.id };
