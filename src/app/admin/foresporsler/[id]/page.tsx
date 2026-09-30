@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/server/db";
+import { inquiryDetail } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
-import { formatAddonPrice, formatCalendarDate, formatDateTime, formatPackagePrice, InquirySnapshot } from "@/lib/content";
+import { formatAddonPrice, formatCalendarDate, formatDateTime, formatPackagePrice } from "@/lib/format";
+import { InquirySnapshot } from "@/lib/inquiry";
 import { StatusBadge, EMAIL_STATUS } from "@/components/AdminBits";
 import { DeleteForm, StatusForm } from "@/components/InquiryAdminForms";
 import { retryEmailAction } from "../../actions";
@@ -14,7 +15,7 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
 export default async function InquiryDetail({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
   const { id } = await params;
-  const i = await db.inquiry.findUnique({ where: { id }, include: { customer: true, version: true, emailJobs: { orderBy: { createdAt: "asc" } } } });
+  const i = await inquiryDetail(id);
   if (!i) notFound();
   const s = JSON.parse(i.snapshot) as InquirySnapshot;
   const price = s.package ? formatPackagePrice(s.package) : null;

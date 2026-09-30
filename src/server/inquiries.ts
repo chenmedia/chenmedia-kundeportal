@@ -4,7 +4,7 @@ import { db } from "./db";
 import { randomReference } from "./crypto";
 import { resolvePublished } from "./customers";
 import { buildEmails, notifyAddress, processInquiryJobs } from "./email";
-import { InquiryInput, InquirySnapshot, OTHER_PACKAGE } from "@/lib/content";
+import { InquiryInput, InquirySnapshot, OTHER_PACKAGE } from "@/lib/inquiry";
 
 export type SubmitResult =
   | { ok: true; reference: string; packageName: string; eventName: string; eventDate: string | null; duplicate: boolean }
@@ -97,4 +97,13 @@ export async function submitInquiry(args: {
     }
   }
   throw new Error("Kunne ikke opprette referanse");
+}
+
+export async function updateInquiryFollowUp(id: string, status: string, internalNotes: string) {
+  await db.inquiry.update({ where: { id }, data: { status, internalNotes } });
+}
+
+/** E-postjobber slettes med cascade. Kundeinnhold og versjoner påvirkes ikke. */
+export async function deleteInquiry(id: string) {
+  await db.inquiry.delete({ where: { id } });
 }

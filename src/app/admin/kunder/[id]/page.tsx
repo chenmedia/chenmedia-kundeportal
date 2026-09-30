@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/server/db";
+import { customerForEditor } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
-import { canonical, emptyContent, parseContent, formatDateTime } from "@/lib/content";
+import { canonical, emptyContent, parseContent } from "@/lib/content";
+import { formatDateTime } from "@/lib/format";
 import { getAdminCustomerLink } from "@/server/customers";
 import { DraftEditor } from "@/components/DraftEditor";
 import { CustomerControls } from "@/components/CustomerControls";
@@ -10,10 +11,7 @@ import { CustomerControls } from "@/components/CustomerControls";
 export default async function CustomerEditPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
   const { id } = await params;
-  const c = await db.customer.findUnique({
-    where: { id },
-    include: { draft: true, currentVersion: true, assets: { orderBy: { createdAt: "desc" } } },
-  });
+  const c = await customerForEditor(id);
   if (!c) notFound();
   const content = c.draft ? parseContent(c.draft.content) : emptyContent();
   const differs = !c.currentVersion || canonical(content) !== canonical(parseContent(c.currentVersion.content)) || c.name !== c.currentVersion.customerName;

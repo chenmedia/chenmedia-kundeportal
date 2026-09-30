@@ -1,24 +1,14 @@
 import Link from "next/link";
-import { db } from "@/server/db";
+import { dashboardData } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
-import { formatDateTime } from "@/lib/content";
+import { formatDateTime } from "@/lib/format";
 import { duplicateAction } from "./actions";
 
 export default async function AdminHome({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   await requireAdmin();
   const { q } = await searchParams;
   const query = (q ?? "").trim();
-  const [customers, newInquiries, failedJobs, newCounts] = await Promise.all([
-    db.customer.findMany({
-      where: query ? { name: { contains: query, mode: "insensitive" } } : undefined,
-      orderBy: { name: "asc" },
-      include: { currentVersion: true },
-    }),
-    db.inquiry.findMany({ where: { status: "new" }, orderBy: { createdAt: "desc" }, take: 5, include: { customer: true } }),
-    db.emailJob.count({ where: { status: "failed" } }),
-    db.inquiry.groupBy({ by: ["customerId"], where: { status: "new" }, _count: true }),
-  ]);
-  const counts = new Map(newCounts.map((c) => [c.customerId, c._count]));
+  const { customers, newInquiries, failedJobs, newCountByCustomer: counts } = await dashboardData(query);
 
   return (
     <div className="grid gap-8">

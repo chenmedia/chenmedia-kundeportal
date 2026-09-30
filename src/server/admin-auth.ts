@@ -1,11 +1,10 @@
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import crypto from "node:crypto";
 import { db } from "./db";
 import { sha256, verifyPassword } from "./crypto";
 import { supabaseAuthConfigured, verifyWithSupabase } from "./supabase-auth";
-export { createAdmin } from "./admin-core";
-import { allow, clientIp, reset } from "./rate-limit";
+import { allow, reset } from "./rate-limit";
 
 export const SESSION_COOKIE = "cm_admin";
 const SESSION_HOURS = 12;
@@ -74,8 +73,4 @@ export function sameOrigin(h: Headers): boolean {
   } catch {
     return false;
   }
-}
-
-export async function requestIp() {
-  return clientIp(await headers());
 }

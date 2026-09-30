@@ -1,11 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { generateToken, sha256, encryptText, decryptText } from "./crypto";
-import {
-  Content, contentSchema, emptyContent, parseContent, canonical, publishProblems, newId,
-} from "@/lib/content";
+import { Content, contentSchema, emptyContent, parseContent, canonical, publishProblems } from "@/lib/content";
 
-export function customerUrl(token: string): string {
+function customerUrl(token: string): string {
   const base = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
   return `${base}/k/${token}`;
 }
@@ -141,4 +139,13 @@ export async function resolvePublished(token: string) {
   };
 }
 
-export { newId };
+
+export async function customerExists(id: string): Promise<boolean> {
+  return !!(await db.customer.findUnique({ where: { id }, select: { id: true } }));
+}
+
+/** Sant hvis bildet finnes og tilhører kunden. */
+export async function assetBelongsToCustomer(assetId: string, customerId: string): Promise<boolean> {
+  const a = await db.mediaAsset.findUnique({ where: { id: assetId }, select: { customerId: true } });
+  return a?.customerId === customerId;
+}

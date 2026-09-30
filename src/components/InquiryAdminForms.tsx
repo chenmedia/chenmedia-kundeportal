@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { STATUS_LABELS, STATUSES } from "@/lib/content";
+import { STATUS_LABELS, STATUSES } from "@/lib/inquiry";
 import { deleteInquiryAction, updateInquiryAction, type ActionState } from "@/app/admin/actions";
 
 export function StatusForm({ id, status, notes }: { id: string; status: string; notes: string }) {

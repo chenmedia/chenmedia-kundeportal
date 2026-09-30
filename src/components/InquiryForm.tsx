@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { inquiryInputSchema, OTHER_PACKAGE, formatCalendarDate, todayInOslo } from "@/lib/content";
+import { formatCalendarDate, todayInOslo } from "@/lib/format";
+import { inquiryInputSchema, OTHER_PACKAGE } from "@/lib/inquiry";
 import { SELECT_EVENT } from "./form-events";
 
 interface Props {

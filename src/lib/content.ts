@@ -5,7 +5,7 @@ export const MAX_PACKAGES = 6;
 
 const optionalText = (max: number) => z.string().trim().max(max).default("");
 
-export const packageSchema = z.object({
+const packageSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().max(80).default(""),
   priceType: z.enum(["fixed", "from"]).default("fixed"),
@@ -31,7 +31,7 @@ export const addonBasisLabels: Record<AddonBasis, string> = {
   percent: "Prosenttillegg",
 };
 
-export const addonSchema = z.object({
+const addonSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().max(120).default(""),
   basis: z.enum(addonBasis).default("one_time"),
@@ -106,95 +106,4 @@ export function publishProblems(content: Content, customerName: string, needsRen
     } else if (a.amountOre === null) p.push(`${n}: beløp mangler.`);
   });
   return p;
-}
-
-// ---------- Formatering ----------
-
-const nok = new Intl.NumberFormat("nb-NO", { maximumFractionDigits: 0 });
-export function formatKr(ore: number): string {
-  // Bruk vanlig mellomrom-variant med hardt mellomrom slik at «16 000 kr» ikke brytes.
-  return `${nok.format(Math.round(ore / 100)).replace(/\s/g, " ")} kr`;
-}
-
-export function formatPackagePrice(p: PackageContent): { label: string; amount: string } {
-  const amount = p.priceOre === null ? "–" : formatKr(p.priceOre);
-  return { label: p.priceType === "from" ? "Fra" : "Fastpris", amount };
-}
-
-export function formatAddonPrice(a: AddonContent): string {
-  if (a.basis === "percent") return `+ ${a.percent ?? 0} %`;
-  const amt = a.amountOre === null ? "–" : formatKr(a.amountOre);
-  switch (a.basis) {
-    case "per_hour": return `${amt}/time`;
-    case "from": return `fra ${amt}`;
-    case "from_per_image": return `fra ${amt}/bilde`;
-    default: return amt;
-  }
-}
-
-/** Dato i Europe/Oslo som YYYY-MM-DD. */
-export function todayInOslo(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-}
-
-export function formatDateTime(d: Date): string {
-  return new Intl.DateTimeFormat("nb-NO", { timeZone: "Europe/Oslo", dateStyle: "medium", timeStyle: "short" }).format(d);
-}
-export function formatDate(d: Date): string {
-  return new Intl.DateTimeFormat("nb-NO", { timeZone: "Europe/Oslo", dateStyle: "long" }).format(d);
-}
-export function formatCalendarDate(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  return new Intl.DateTimeFormat("nb-NO", { timeZone: "UTC", dateStyle: "long" }).format(new Date(Date.UTC(y, m - 1, d)));
-}
-
-// ---------- Forespørsel ----------
-
-export const inquiryInputSchema = z
-  .object({
-    packageId: z.string().min(1, "Velg en pakke, eller «Usikker / annet behov»."),
-    eventName: z.string().trim().min(2, "Skriv minst 2 tegn.").max(150, "Maks 150 tegn."),
-    dateUnknown: z.boolean().default(false),
-    eventDate: z.string().trim().default(""),
-    locationUnknown: z.boolean().default(false),
-    location: z.string().trim().max(200, "Maks 200 tegn.").default(""),
-    timeframe: z.string().trim().max(150, "Maks 150 tegn.").default(""),
-    description: z.string().trim().min(10, "Skriv minst 10 tegn.").max(3000, "Maks 3000 tegn."),
-    contactName: z.string().trim().min(2, "Skriv minst 2 tegn.").max(100, "Maks 100 tegn."),
-    contactEmail: z.string().trim().refine(isEmail, "Skriv en gyldig e-postadresse, for eksempel navn@firma.no."),
-    contactPhone: z.string().trim().max(40, "Maks 40 tegn.").default(""),
-    express: z.boolean().default(false),
-    printUse: z.boolean().default(false),
-  })
-  .superRefine((v, ctx) => {
-    if (!v.dateUnknown) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(v.eventDate)) {
-        ctx.addIssue({ code: "custom", path: ["eventDate"], message: "Velg en dato, eller kryss av for «Dato er ikke avklart»." });
-      } else if (v.eventDate < todayInOslo()) {
-        ctx.addIssue({ code: "custom", path: ["eventDate"], message: "Datoen har passert. Velg en dato fra i dag av." });
-      }
-    }
-    if (!v.locationUnknown && v.location.length < 2) {
-      ctx.addIssue({ code: "custom", path: ["location"], message: "Skriv sted, eller kryss av for «Sted er ikke avklart»." });
-    }
-  });
-export type InquiryInput = z.infer<typeof inquiryInputSchema>;
-
-export const OTHER_PACKAGE = "other";
-
-export const STATUS_LABELS: Record<string, string> = {
-  new: "Ny",
-  following_up: "Under oppfølging",
-  clarified: "Avklart",
-  closed: "Avsluttet",
-};
-export const STATUSES = Object.keys(STATUS_LABELS);
-
-export interface InquirySnapshot {
-  customerName: string;
-  agreementLabel: string;
-  versionNumber: number;
-  package: PackageContent | null;
-  addons: AddonContent[];
-  practical: string[];
 }

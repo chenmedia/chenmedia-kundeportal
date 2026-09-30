@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/server/db";
+import { customerVersions } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
-import { formatDateTime } from "@/lib/content";
+import { formatDateTime } from "@/lib/format";
 
 export default async function Versions({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
   const { id } = await params;
-  const c = await db.customer.findUnique({ where: { id }, include: { versions: { orderBy: { number: "desc" } } } });
+  const c = await customerVersions(id);
   if (!c) notFound();
   return (
     <div>

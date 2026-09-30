@@ -26,7 +26,7 @@ function assertKey(key: string) {
   if (!KEY_RE.test(key)) throw new Error("Ugyldig lagringsnøkkel");
 }
 
-export function storageDir(): string {
+function storageDir(): string {
   return path.resolve(process.env.STORAGE_DIR ?? "./storage");
 }
 

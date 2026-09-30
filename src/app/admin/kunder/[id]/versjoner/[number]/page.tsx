@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/server/db";
+import { versionByNumber } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
 import { parseContent } from "@/lib/content";
 import { CustomerPage } from "@/components/CustomerPage";
@@ -8,7 +8,7 @@ import { CustomerPage } from "@/components/CustomerPage";
 export default async function VersionView({ params }: { params: Promise<{ id: string; number: string }> }) {
   await requireAdmin();
   const { id, number } = await params;
-  const v = await db.publishedVersion.findUnique({ where: { customerId_number: { customerId: id, number: Number(number) || -1 } } });
+  const v = await versionByNumber(id, Number(number) || -1);
   if (!v) notFound();
   return (
     <div className="-mx-5 -my-8 md:-mx-8 md:-my-10">

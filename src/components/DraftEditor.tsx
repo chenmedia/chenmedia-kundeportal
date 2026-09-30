@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AddonContent, Content, MAX_PACKAGES, PackageContent, addonBasis, addonBasisLabels, newId, DEFAULT_CTA,
-} from "@/lib/content";
+import { AddonContent, Content, MAX_PACKAGES, PackageContent, addonBasis, addonBasisLabels, newId, DEFAULT_CTA } from "@/lib/content";
 import { saveDraftAction } from "@/app/admin/actions";
 
 interface Asset { id: string; name: string; width: number; height: number }

@@ -1,5 +1,6 @@
 import { db } from "./db";
-import { formatCalendarDate, formatKr, formatPackagePrice, InquirySnapshot } from "@/lib/content";
+import { formatCalendarDate, formatPackagePrice } from "@/lib/format";
+import { InquirySnapshot } from "@/lib/inquiry";
 import type { Inquiry } from "@prisma/client";
 import { logError } from "./log";
 
@@ -105,4 +106,3 @@ export async function processInquiryJobs(inquiryId: string) {
   for (const j of jobs) await processJob(j.id);
 }
 
-export { formatKr };

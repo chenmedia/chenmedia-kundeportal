@@ -1,5 +1,6 @@
 import type { Content, PackageContent } from "@/lib/content";
-import { DEFAULT_CTA, DEFAULT_INTRO, formatAddonPrice, formatDate, formatPackagePrice } from "@/lib/content";
+import { DEFAULT_CTA, DEFAULT_INTRO } from "@/lib/content";
+import { formatAddonPrice, formatDate, formatPackagePrice } from "@/lib/format";
 import { Logo } from "./Logo";
 import { InquiryForm } from "./InquiryForm";
 import { OpenFormButton, SelectPackageButton } from "./SelectPackageButton";

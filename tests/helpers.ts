@@ -1,7 +1,7 @@
 import { db } from "@/server/db";
 import { createCustomer, getRawToken, publish } from "@/server/customers";
 import { obosContent } from "@/server/seed-data";
-import { InquiryInput } from "@/lib/content";
+import { InquiryInput } from "@/lib/inquiry";
 
 export async function makeCustomer(name = "Testkunde") {
   const c = await createCustomer(name);
