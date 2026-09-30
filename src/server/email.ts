@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { formatCalendarDate, formatKr, formatPackagePrice, InquirySnapshot } from "@/lib/content";
 import type { Inquiry } from "@prisma/client";
+import { logError } from "./log";
 
 export function emailConfigured(): boolean {
   return process.env.EMAIL_PROVIDER === "resend" && !!process.env.RESEND_API_KEY && !!process.env.EMAIL_FROM;
@@ -90,6 +91,7 @@ export async function processJob(jobId: string): Promise<void> {
       data: { status: "sent", attempts: { increment: 1 }, lastAttemptAt: new Date(), errorCategory: null },
     });
   } catch (e) {
+    logError("email.send", e, { jobId });
     const cat = e instanceof Error && /^http_\d+$/.test(e.message) ? e.message : "network_error";
     await db.emailJob.update({
       where: { id: jobId },

@@ -25,11 +25,17 @@ export async function login(email: string, password: string, ip: string) {
   }
   if (!user || !ok) return { ok: false as const, error: "invalid" as const };
   await reset(key);
+  await purgeExpiredSessions().catch(() => undefined);
   const token = crypto.randomBytes(32).toString("base64url");
   await db.adminSession.create({
     data: { tokenHash: sha256(token), adminId: user.id, expiresAt: new Date(Date.now() + SESSION_HOURS * 3600_000) },
   });
   return { ok: true as const, token, maxAge: SESSION_HOURS * 3600 };
+}
+
+/** Sletter utløpte admin-sesjoner. Kalles ved hver vellykket innlogging. */
+export async function purgeExpiredSessions(now: Date = new Date()): Promise<number> {
+  return (await db.adminSession.deleteMany({ where: { expiresAt: { lt: now } } })).count;
 }
 
 export async function sessionFromToken(token: string | undefined) {

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { logWarn } from "./log";
 
 /**
  * Lagringsadapter for bilder.
@@ -83,12 +84,12 @@ function supabase(): Store {
       const res = await fetch(`${base}/object/${bucket}/${key}`, {
         method: "POST", headers: { ...auth, "Content-Type": mime, "x-upsert": "true" }, body: new Uint8Array(data),
       });
-      if (!res.ok) throw new Error(`storage_put_${res.status}`);
+      if (!res.ok) { logWarn("storage.put", "opplasting feilet", { status: res.status }); throw new Error(`storage_put_${res.status}`); }
     },
     async uploadTarget(key) {
       assertKey(key);
       const res = await fetch(`${base}/object/upload/sign/${bucket}/${key}`, { method: "POST", headers: auth });
-      if (!res.ok) throw new Error(`storage_sign_${res.status}`);
+      if (!res.ok) { logWarn("storage.sign-upload", "signering feilet", { status: res.status }); throw new Error(`storage_sign_${res.status}`); }
       const { url } = (await res.json()) as { url: string };
       return { url: base + url };
     },
@@ -112,7 +113,7 @@ function supabase(): Store {
       const res = await fetch(`${base}/object/sign/${bucket}/${key}`, {
         method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ expiresIn: 60 }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) { logWarn("storage.sign-download", "signering feilet", { status: res.status }); return null; }
       const { signedURL } = (await res.json()) as { signedURL: string };
       return new Response(null, {
         status: 302,
