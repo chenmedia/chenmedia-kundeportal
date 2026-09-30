@@ -27,10 +27,11 @@ export default defineConfig({
     launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
   },
   webServer: {
-    command: `npx next dev -p ${PORT}`,
+    // Produksjonsbygg i stedet for dev: ingen Fast Refresh-omlasting som tømmer skjemaer midt i testen.
+    command: `npx next build && npx next start -p ${PORT}`,
     url: `http://localhost:${PORT}/`,
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 240_000,
     env: E2E_ENV,
   },
 });
