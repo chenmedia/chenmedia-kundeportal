@@ -152,3 +152,32 @@ dialog.request-dialog::backdrop { background: rgba(17,17,17,.6); backdrop-filter
   .request-dialog__body { padding: 32px 40px 44px; }
   .request-dialog__bar { padding: 14px 20px 14px 32px; }
 }
+
+/* ---------- Utskrift / lagre som PDF ---------- */
+@media print {
+  @page { margin: 14mm; }
+  html, body { background: #fff !important; color: #111 !important; }
+  body { font-size: 11pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print, .btn, .sticky-cta, dialog, .skip-link, nav, [data-testid="open-form"] { display: none !important; }
+  .wrap { max-width: none; padding-left: 0; padding-right: 0; }
+  section { padding-top: 4mm !important; padding-bottom: 4mm !important; }
+  header { padding-top: 0 !important; padding-bottom: 2mm !important; }
+  footer > div { padding-top: 6mm !important; padding-bottom: 6mm !important; grid-template-columns: 1fr 1fr !important; }
+  a[href="#pakker"] { display: none !important; }
+  /* Kompakt topp: pakkene skal ligge på første side */
+  #hero { padding-top: 0 !important; padding-bottom: 2mm !important; }
+  #hero .ingress { display: none !important; }
+  #hero dl { margin-top: 5mm !important; }
+  .hero-title { font-size: 22pt !important; }
+  #pakker { padding-top: 2mm !important; }
+  #pakker ul { margin-top: 4mm !important; }
+  .card, .pkg-card, li { break-inside: avoid; box-shadow: none !important; transform: none !important; }
+  .card { border: 1px solid #bbb; }
+  /* Svarte flater skrives ut som lyse med tynn kontur (sparer toner) */
+  footer, .bg-ink { background: #fff !important; color: #111 !important; border: 1px solid #bbb; }
+  footer *, .bg-ink * { color: #111 !important; }
+  footer img, .bg-ink img { filter: invert(1); }
+  #hero .aspect-\[16\/9\], #hero [class*="aspect-"] { display: none !important; }
+  a { text-decoration: none; color: inherit; }
+  .pkg-card { border: 1px solid #999; }
+}

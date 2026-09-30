@@ -6,6 +6,7 @@ import { InquiryForm } from "./InquiryForm";
 import { OpenFormButton, SelectPackageButton } from "./SelectPackageButton";
 import { RequestDialog } from "./RequestDialog";
 import { StickyCta } from "./StickyCta";
+import { PrintButton } from "./PrintButton";
 import { ArrowDown, CheckIcon } from "./Icons";
 
 export interface CustomerPageProps {
@@ -181,7 +182,7 @@ export function CustomerPage(props: CustomerPageProps) {
         )}
 
         {/* Slik går det til + oppfordring */}
-        <section className="wrap py-10 md:py-14" aria-labelledby="steg-title">
+        <section className="wrap py-10 md:py-14 no-print" aria-labelledby="steg-title">
           <div className="card p-6 md:p-10">
             <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] lg:gap-14 items-center">
               <div>
@@ -190,7 +191,10 @@ export function CustomerPage(props: CustomerPageProps) {
                 <p className="ingress mt-4 text-[16px]">
                   Ikke alle trenger å booke med en gang. Når behovet er der, sender du en forespørsel herfra, så slipper du å lete etter e-poster.
                 </p>
-                <div className="mt-7"><OpenFormButton label={cta} variant="dark" /></div>
+                <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2">
+                  <OpenFormButton label={cta} variant="dark" />
+                  <PrintButton />
+                </div>
               </div>
               <ol className="grid gap-4">
                 {STEPS.map((s, i) => (
@@ -228,7 +232,7 @@ export function CustomerPage(props: CustomerPageProps) {
             </p>
             {content.validityText && <p className="mt-1 text-sm text-white/80">{content.validityText}</p>}
           </div>
-          <div>
+          <div className="no-print">
             <h2 className="eyebrow !text-white/70">Personvern</h2>
             <p className="mt-3 text-sm text-white/85">
               Opplysningene du sender inn i skjemaet brukes til å følge opp fotobehovet ditt hos Chen Media.

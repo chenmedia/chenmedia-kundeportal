@@ -8,6 +8,7 @@ import "@fontsource/space-mono/latin-400.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.APP_URL ?? "http://localhost:3000"),
   title: "Chen Media Kundepriser",
   description: "Eventfoto og film for bedrifter.",
   robots: { index: false, follow: false },
