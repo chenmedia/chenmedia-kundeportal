@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { inquiryInputSchema } from "@/lib/content";
+import { inquiryInputSchema } from "@/lib/inquiry";
 import { submitInquiry } from "@/server/inquiries";
 import { allow, clientIp } from "@/server/rate-limit";
 import { sameOrigin } from "@/server/admin-auth";
 import { sha256 } from "@/server/crypto";
+import { logError } from "@/server/log";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     }
     if (r.code === "UNAVAILABLE") return NextResponse.json({ ok: false, error: "unavailable" }, { status: 404 });
     return NextResponse.json({ ok: false, error: r.code.toLowerCase() }, { status: 409 });
-  } catch {
+  } catch (e) {
+    logError("inquiry.submit", e);
     return NextResponse.json({ ok: false, error: "server" }, { status: 500 });
   }
 }

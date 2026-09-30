@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentAdmin, sameOrigin } from "@/server/admin-auth";
 import { prepareUpload } from "@/server/media";
+import { logError } from "@/server/log";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,8 @@ export async function POST(req: Request) {
   if (!sameOrigin(req.headers)) return NextResponse.json({ ok: false, error: "Ugyldig origin." }, { status: 403 });
   try {
     return NextResponse.json({ ok: true, ...(await prepareUpload()) });
-  } catch {
+  } catch (e) {
+    logError("media.prepare", e);
     return NextResponse.json({ ok: false, error: "Bildelagring er ikke tilgjengelig. Sjekk oppsettet." }, { status: 503 });
   }
 }

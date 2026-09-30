@@ -3,14 +3,13 @@ import { imageSize } from "image-size";
 import { db } from "./db";
 import { KEY_RE, getStore } from "./storage";
 
-export { storageDir } from "./storage";
 export const MAX_UPLOAD = 10 * 1024 * 1024;
 const HEADER_BYTES = 128 * 1024;
 const ALLOWED: Record<string, string> = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
 
 export type UploadResult = { ok: true; id: string } | { ok: false; error: string };
 
-export function newStorageKey(): string {
+function newStorageKey(): string {
   return crypto.randomBytes(16).toString("hex");
 }
 

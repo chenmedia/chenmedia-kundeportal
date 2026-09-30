@@ -4,12 +4,14 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/server/db";
 import { SESSION_COOKIE, login, logout, requireAdmin } from "@/server/admin-auth";
 import { clientIp } from "@/server/rate-limit";
-import { createCustomer, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
-import { contentSchema, STATUSES } from "@/lib/content";
+import { assetBelongsToCustomer, createCustomer, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
+import { deleteInquiry, updateInquiryFollowUp } from "@/server/inquiries";
+import { contentSchema } from "@/lib/content";
+import { STATUSES } from "@/lib/inquiry";
 import { processJob } from "@/server/email";
+import { logError } from "@/server/log";
 
 export interface ActionState { ok?: boolean; error?: string; problems?: string[] }
 
@@ -42,6 +44,7 @@ export async function createCustomerAction(_prev: ActionState, fd: FormData): Pr
   try {
     id = (await createCustomer(name)).id;
   } catch (e) {
+    logError("customer.create", e);
     const missingSecret = e instanceof Error && e.message.includes("APP_SECRET");
     return { error: missingSecret ? "Serveren mangler APP_SECRET. Sett den i Vercel og redeploy." : "Kunne ikke opprette kunden. Prøv igjen." };
   }
@@ -60,8 +63,7 @@ export async function saveDraftAction(customerId: string, name: string, contentJ
   }
   // Bilder må tilhøre denne kunden.
   if (parsed.heroImageId) {
-    const a = await db.mediaAsset.findUnique({ where: { id: parsed.heroImageId } });
-    if (!a || a.customerId !== customerId) return { error: "Bildet tilhører ikke denne kunden." };
+    if (!(await assetBelongsToCustomer(parsed.heroImageId, customerId))) return { error: "Bildet tilhører ikke denne kunden." };
   }
   await saveDraft(customerId, nm, parsed);
   revalidatePath(`/admin/kunder/${customerId}`);
@@ -73,7 +75,8 @@ export async function publishAction(customerId: string): Promise<ActionState> {
   try {
     const r = await publish(customerId);
     if (!r.ok) return { error: "Kan ikke publisere ennå.", problems: r.problems };
-  } catch {
+  } catch (e) {
+    logError("customer.publish", e, { customerId });
     return { error: "Publiseringen feilet. Ingenting er endret. Prøv igjen." };
   }
   revalidatePath(`/admin/kunder/${customerId}`);
@@ -85,7 +88,8 @@ export async function rotateTokenAction(customerId: string): Promise<ActionState
   await requireAdmin();
   try {
     await rotateToken(customerId);
-  } catch {
+  } catch (e) {
+    logError("customer.rotate-token", e, { customerId });
     return { error: "Kunne ikke generere ny lenke. Sjekk at APP_SECRET er satt." };
   }
   revalidatePath(`/admin/kunder/${customerId}`);
@@ -112,7 +116,7 @@ export async function updateInquiryAction(id: string, _prev: ActionState, fd: Fo
   await requireAdmin();
   const p = inquiryUpdate.safeParse({ status: fd.get("status"), notes: String(fd.get("notes") ?? "") });
   if (!p.success) return { error: "Ugyldig status eller notat." };
-  await db.inquiry.update({ where: { id }, data: { status: p.data.status, internalNotes: p.data.notes } });
+  await updateInquiryFollowUp(id, p.data.status, p.data.notes);
   revalidatePath(`/admin/foresporsler/${id}`);
   revalidatePath("/admin");
   return { ok: true };
@@ -121,7 +125,7 @@ export async function updateInquiryAction(id: string, _prev: ActionState, fd: Fo
 export async function deleteInquiryAction(id: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin();
   if (fd.get("confirm") !== "on") return { error: "Kryss av for å bekrefte at forespørselen skal slettes." };
-  await db.inquiry.delete({ where: { id } }); // e-postjobber slettes med cascade
+  await deleteInquiry(id);
   redirect("/admin/foresporsler");
 }
 

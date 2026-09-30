@@ -1,10 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { generateToken, sha256, encryptText, decryptText } from "./crypto";
-import {
-  Content, contentSchema, emptyContent, parseContent, canonical, publishProblems, newId,
-} from "@/lib/content";
+import { Content, contentSchema, emptyContent, parseContent, canonical, publishProblems } from "@/lib/content";
 
-export function customerUrl(token: string): string {
+function customerUrl(token: string): string {
   const base = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
   return `${base}/k/${token}`;
 }
@@ -96,20 +95,31 @@ export async function publish(customerId: string) {
   const content = parseContent(customer.draft?.content ?? JSON.stringify(emptyContent()));
   const problems = publishProblems(content, customer.name, customer.needsRename);
   if (problems.length) return { ok: false as const, problems };
-  const version = await db.$transaction(async (tx) => {
-    const last = await tx.publishedVersion.aggregate({ where: { customerId }, _max: { number: true } });
-    const v = await tx.publishedVersion.create({
-      data: {
-        customerId,
-        number: (last._max.number ?? 0) + 1,
-        customerName: customer.name,
-        label: content.agreementLabel,
-        content: canonical(content),
-      },
-    });
-    await tx.customer.update({ where: { id: customerId }, data: { currentVersionId: v.id } });
-    return v;
-  });
+  // To samtidige publiseringer kan velge samme versjonsnummer. Den ene taper på unik-nøkkelen
+  // (customerId + number) og prøver da på nytt med neste nummer.
+  let version;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      version = await db.$transaction(async (tx) => {
+        const last = await tx.publishedVersion.aggregate({ where: { customerId }, _max: { number: true } });
+        const v = await tx.publishedVersion.create({
+          data: {
+            customerId,
+            number: (last._max.number ?? 0) + 1,
+            customerName: customer.name,
+            label: content.agreementLabel,
+            content: canonical(content),
+          },
+        });
+        await tx.customer.update({ where: { id: customerId }, data: { currentVersionId: v.id } });
+        return v;
+      });
+      break;
+    } catch (e) {
+      const conflict = e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
+      if (!conflict || attempt >= 4) throw e;
+    }
+  }
   return { ok: true as const, version };
 }
 
@@ -129,4 +139,13 @@ export async function resolvePublished(token: string) {
   };
 }
 
-export { newId };
+
+export async function customerExists(id: string): Promise<boolean> {
+  return !!(await db.customer.findUnique({ where: { id }, select: { id: true } }));
+}
+
+/** Sant hvis bildet finnes og tilhører kunden. */
+export async function assetBelongsToCustomer(assetId: string, customerId: string): Promise<boolean> {
+  const a = await db.mediaAsset.findUnique({ where: { id: assetId }, select: { customerId: true } });
+  return a?.customerId === customerId;
+}

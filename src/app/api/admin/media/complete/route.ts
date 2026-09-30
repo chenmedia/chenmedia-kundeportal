@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { currentAdmin, sameOrigin } from "@/server/admin-auth";
 import { completeUpload } from "@/server/media";
-import { db } from "@/server/db";
+import { customerExists } from "@/server/customers";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (!sameOrigin(req.headers)) return NextResponse.json({ ok: false, error: "Ugyldig origin." }, { status: 403 });
   const p = body.safeParse(await req.json().catch(() => null));
   if (!p.success) return NextResponse.json({ ok: false, error: "Ugyldig forespørsel." }, { status: 400 });
-  if (!(await db.customer.findUnique({ where: { id: p.data.customerId } }))) {
+  if (!(await customerExists(p.data.customerId))) {
     return NextResponse.json({ ok: false, error: "Ukjent kunde." }, { status: 404 });
   }
   const r = await completeUpload(p.data.customerId, p.data.key, p.data.filename);

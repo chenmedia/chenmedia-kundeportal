@@ -1,3 +1,5 @@
+import { logError, logWarn } from "./log";
+
 /**
  * Passordsjekk mot Supabase Auth. Brukes bare til å verifisere legitimasjon.
  * Hvem som er administrator bestemmes av AdminUser-tabellen (godkjenningsliste), ikke av Supabase alene.
@@ -20,10 +22,15 @@ export async function verifyWithSupabase(email: string, password: string): Promi
       headers: { apikey: key, "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-  } catch {
+  } catch (e) {
+    logError("auth.supabase", e);
     return { ok: false };
   }
-  if (!res.ok) return { ok: false };
+  // 400 = feil passord (forventet). Alt annet tyder på et oppsettsproblem hos Supabase.
+  if (!res.ok) {
+    if (res.status !== 400) logWarn("auth.supabase", "uventet svar fra Supabase Auth", { status: res.status });
+    return { ok: false };
+  }
   const data = (await res.json().catch(() => null)) as { access_token?: string; user?: { email?: string; email_confirmed_at?: string | null } } | null;
   const user = data?.user;
   const valid = !!data?.access_token && !!user?.email_confirmed_at && user.email?.toLowerCase() === email.toLowerCase();

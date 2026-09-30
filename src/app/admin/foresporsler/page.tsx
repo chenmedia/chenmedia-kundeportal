@@ -1,26 +1,15 @@
 import Link from "next/link";
-import { db } from "@/server/db";
+import { inquiryList } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
-import { STATUS_LABELS, STATUSES, formatCalendarDate, formatDateTime, InquirySnapshot } from "@/lib/content";
+import { formatCalendarDate, formatDateTime } from "@/lib/format";
+import { STATUS_LABELS, STATUSES, InquirySnapshot } from "@/lib/inquiry";
 import { StatusBadge } from "@/components/AdminBits";
 
 export default async function Inquiries({ searchParams }: { searchParams: Promise<{ status?: string; kunde?: string; epost?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
   const status = STATUSES.includes(sp.status ?? "") ? sp.status : undefined;
-  const [customers, list] = await Promise.all([
-    db.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    db.inquiry.findMany({
-      where: {
-        ...(status ? { status } : {}),
-        ...(sp.kunde ? { customerId: sp.kunde } : {}),
-        ...(sp.epost === "feilet" ? { emailJobs: { some: { status: "failed" } } } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      include: { customer: true, emailJobs: true },
-      take: 200,
-    }),
-  ]);
+  const { customers, list } = await inquiryList({ status, customerId: sp.kunde || undefined, failedEmail: sp.epost === "feilet" });
 
   return (
     <div className="grid gap-6">

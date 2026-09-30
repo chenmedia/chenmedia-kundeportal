@@ -2,7 +2,9 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import { db } from "@/server/db";
 import { publish, resolvePublished, saveDraft } from "@/server/customers";
 import { submitInquiry } from "@/server/inquiries";
-import { inquiryInputSchema, parseContent, todayInOslo, InquirySnapshot } from "@/lib/content";
+import { parseContent } from "@/lib/content";
+import { todayInOslo } from "@/lib/format";
+import { inquiryInputSchema, InquirySnapshot } from "@/lib/inquiry";
 import { makePublished, validInput } from "./helpers";
 import { processJob } from "@/server/email";
 
