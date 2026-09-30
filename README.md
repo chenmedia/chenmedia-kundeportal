@@ -59,7 +59,7 @@ npm run dev                 # http://localhost:3000
 ## Vercel + Supabase
 
 Vercel har ingen varig disk, derfor brukes Supabase for data (Postgres) og bilder (Storage). Appen
-er klargjort (`vercel.json`, region `lhr1` (London) nær Supabase-prosjektet i eu-west-2), men **ikke deployet**.
+er klargjort (`vercel.json`, region `cdg1` (Paris) nær Supabase-prosjektet i eu-west-3), men **ikke deployet**.
 
 1. **Supabase:** bruk et aktivt prosjekt. Kjør migrasjonene mot **DIRECT_URL**:
    `DATABASE_URL=<direct> DIRECT_URL=<direct> npm run db:migrate`. Kjør deretter
