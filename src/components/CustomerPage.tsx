@@ -92,25 +92,24 @@ export function CustomerPage(props: CustomerPageProps) {
               <p className="ingress text-[17px] md:text-[18px] mt-6 max-w-[34rem]">{content.introText || DEFAULT_INTRO}</p>
               <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
                 <OpenFormButton label={cta} testId="open-form" />
-                <a href="#pakker" className="link font-semibold inline-flex items-center gap-1.5">
+                <a href="#pakker" className="link font-semibold inline-flex items-center gap-1.5 min-h-[44px]">
                   Se pakker og priser <ArrowDown className="h-4 w-4" />
                 </a>
               </div>
             </div>
 
-            <div className="relative aspect-[4/3] rounded-[28px] overflow-hidden border border-line bg-ink">
+            <div className="relative aspect-[16/9] lg:aspect-[4/3] rounded-[28px] overflow-hidden border border-line bg-ink">
               {hero ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={hero} alt={content.heroImageAlt || `Bilde fra et event fotografert av Chen Media for ${customerName}`} className="absolute inset-0 h-full w-full object-cover" />
               ) : (
                 <div role="img" aria-label="Plassholder for eventbilde" className="absolute inset-0">
                   {/* Krusedullen: stor og beskåret i hjørnet, 100 % hvit */}
-                  <div className="absolute -right-[16%] -top-[14%] w-[64%]">
+                  <div className="absolute -right-[14%] -top-[16%] w-[42%] lg:w-[56%]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/brand/mark-white.png" alt="" aria-hidden="true" className="block h-auto w-full" />
                   </div>
-                  <p className="eyebrow !text-white/70 absolute left-6 top-6">Chen Media · Foto &amp; video</p>
-                  <p className="display absolute left-6 bottom-6 text-white text-2xl md:text-3xl max-w-[12ch]">Vi fanger øyeblikkene</p>
+                  <p className="display absolute left-5 bottom-5 lg:left-6 lg:bottom-6 text-white text-xl sm:text-2xl lg:text-3xl max-w-[12ch]">Vi fanger øyeblikkene</p>
                 </div>
               )}
             </div>
@@ -119,7 +118,7 @@ export function CustomerPage(props: CustomerPageProps) {
           {/* Fakta */}
           <dl className="mt-12 grid md:grid-cols-3 card overflow-hidden">
             <div className="fact"><dt className="eyebrow">Avtale</dt><dd className="title text-lg mt-1">{content.agreementLabel || "Utkast"}</dd></div>
-            <div className="fact"><dt className="eyebrow">Priser</dt><dd className="title text-lg mt-1">Oppgitt eks. mva.</dd></div>
+            <div className="fact"><dt className="eyebrow">Publisert</dt><dd className="title text-lg mt-1">{props.publishedAt ? formatDate(props.publishedAt) : "Ikke publisert"}</dd></div>
             <div className="fact"><dt className="eyebrow">Kontaktperson</dt><dd className="title text-lg mt-1">{content.contactName || "Chen Media"}</dd></div>
           </dl>
         </section>
@@ -163,7 +162,7 @@ export function CustomerPage(props: CustomerPageProps) {
               </div>
             )}
             {content.practical.length > 0 && (
-              <div className="min-w-0 p-5 md:p-8 md:col-span-2 rounded-[20px] bg-ink text-white on-dark">
+              <div className="min-w-0 p-5 md:p-8 md:col-span-2 rounded-[20px] bg-ink text-white on-dark flex flex-col">
                 <p className="eyebrow !text-white/70 mb-3">Godt å vite</p>
                 <h2 className="section-title">Praktisk</h2>
                 <ul className="mt-5 space-y-3 text-[15px]">
@@ -175,6 +174,17 @@ export function CustomerPage(props: CustomerPageProps) {
                   ))}
                 </ul>
                 <p className="text-sm text-white/75 mt-6">Tillegg avklares i det endelige tilbudet. Skjemaet beregner ingen totalsum.</p>
+                {content.contactEmail && (
+                  <div className="mt-auto pt-8">
+                    <div className="border-t border-white/20 pt-5">
+                      <p className="eyebrow !text-white/70">Spørsmål om avtalen?</p>
+                      <p className="mt-2 text-[15px]">
+                        Kontakt {content.contactName || "Chen Media"}:{" "}
+                        <a href={`mailto:${content.contactEmail}`} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -245,7 +255,7 @@ export function CustomerPage(props: CustomerPageProps) {
         <InquiryForm
           token={props.token}
           versionId={props.versionId}
-          packages={content.packages.map((p) => ({ id: p.id, name: p.name, custom: p.custom }))}
+          packages={content.packages.map((p) => { const pr = formatPackagePrice(p); return { id: p.id, name: p.name, custom: p.custom, priceText: `${pr.label} ${pr.amount} eks. mva.` }; })}
           disabledReason={props.formDisabledReason}
           emailConfigured={!!props.emailConfigured}
           contactEmail={content.contactEmail}

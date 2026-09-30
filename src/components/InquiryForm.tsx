@@ -9,7 +9,7 @@ import { SELECT_EVENT } from "./form-events";
 interface Props {
   token?: string;
   versionId: string;
-  packages: { id: string; name: string; custom: boolean }[];
+  packages: { id: string; name: string; custom: boolean; priceText: string }[];
   disabledReason?: string;
   emailConfigured: boolean;
   contactEmail: string;
@@ -187,6 +187,19 @@ export function InquiryForm(props: Props) {
 
       <fieldset disabled={disabled} className="mt-8 grid gap-6 md:grid-cols-2 min-w-0">
         <div className="md:col-span-2">
+          <div aria-live="polite" className="mb-4">
+            {(() => {
+              const sel = props.packages.find((x) => x.id === v.packageId);
+              if (!sel && v.packageId !== OTHER_PACKAGE) return null;
+              return (
+                <p className="rounded-2xl border border-line bg-cream/60 px-4 py-3 text-[15px]" data-testid="selected-package">
+                  <span className="eyebrow block">Du forespør</span>
+                  <span className="title">{sel ? sel.name : "Usikker / annet behov"}</span>
+                  <span className="text-muted"> · {sel ? sel.priceText : "pris avklares i tilbudet"}</span>
+                </p>
+              );
+            })()}
+          </div>
           <label htmlFor="f-packageId" className="field-label">Pakke</label>
           <select id="f-packageId" className="input" value={v.packageId} onChange={(e) => set("packageId", e.target.value)}
             aria-invalid={inv("packageId")} aria-describedby={desc("packageId")}>
