@@ -232,6 +232,29 @@ test("skjemaet ligger bak knapp: Esc lukker, teksten beholdes, og flytende knapp
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
+test("utskrift: knapper og dialog skjules, priser og vilkår beholdes", async ({ page }) => {
+  await page.goto(await obosLink());
+  await expect(page.getByRole("button", { name: /Skriv ut eller lagre som PDF/ })).toBeVisible();
+  await page.emulateMedia({ media: "print" });
+  await expect(page.getByTestId("open-form")).toBeHidden();
+  await expect(page.locator(".sticky-cta")).toBeHidden();
+  await expect(page.getByRole("button", { name: /Forespør – Medium event/ })).toBeHidden();
+  await expect(page.getByText(/^10\s000\skr$/)).toBeVisible();
+  await expect(page.getByText("Betalingsfrist: 30 dager.")).toBeVisible();
+  const pdf = await page.pdf({ format: "A4" });
+  expect(pdf.length).toBeGreaterThan(10_000);
+});
+
+test("lenkeforhåndsvisning er nøytral: ingen kundenavn eller priser i metadata", async ({ page }) => {
+  await page.goto(await obosLink());
+  const og = await page.locator('meta[property="og:title"], meta[property="og:description"]').evaluateAll((els) => els.map((e) => e.getAttribute("content") ?? ""));
+  expect(og.join(" ")).toContain("Chen Media");
+  expect(og.join(" ")).not.toMatch(/OBOS|kr\b|\d{3}/);
+  expect(await page.title()).toBe("Fotopakker og priser | Chen Media");
+  const img = await page.request.get("/brand/og.png");
+  expect(img.status()).toBe(200);
+});
+
 test("admin: kunde kan opprettes med bare navn på kontaktperson, og kontakten kan endres", async ({ page }) => {
   await adminLogin(page);
   await page.getByRole("link", { name: "Opprett kunde" }).click();
