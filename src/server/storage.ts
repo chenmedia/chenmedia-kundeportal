@@ -17,6 +17,8 @@ export interface Store {
   uploadTarget(key: string): Promise<{ url: string }>;
   /** Leser de første byte og total størrelse. */
   readRange(key: string, maxBytes: number): Promise<{ bytes: Buffer; total: number } | null>;
+  /** Leser hele filen. */
+  read(key: string): Promise<Buffer | null>;
   remove(key: string): Promise<void>;
   /** Svarer på en allerede tilgangskontrollert forespørsel. */
   serve(key: string, mime: string): Promise<Response | null>;
@@ -53,6 +55,14 @@ const local: Store = {
       } finally {
         await fh.close();
       }
+    } catch {
+      return null;
+    }
+  },
+  async read(key) {
+    assertKey(key);
+    try {
+      return await fs.readFile(path.join(storageDir(), key));
     } catch {
       return null;
     }
@@ -101,6 +111,11 @@ function supabase(): Store {
       const cr = res.headers.get("content-range"); // bytes 0-65535/12345
       const total = cr ? Number(cr.split("/")[1]) : bytes.length;
       return { bytes, total: Number.isFinite(total) ? total : bytes.length };
+    },
+    async read(key) {
+      assertKey(key);
+      const res = await fetch(`${base}/object/authenticated/${bucket}/${key}`, { headers: auth });
+      return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
     },
     async remove(key) {
       assertKey(key);
