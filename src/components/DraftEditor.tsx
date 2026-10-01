@@ -288,10 +288,10 @@ export function DraftEditor(props: {
         <button type="button" className="btn btn-outline btn-sm self-start" onClick={() => patch({ practical: [...c.practical, ""] })}>+ Legg til vilkår</button>
       </Section>
 
-      <Section id="s-kontakt" title="Kontakt" intro="Vises nederst på kundesiden. Påkrevd e-post brukes også som varseladresse hvis NOTIFY_EMAIL ikke er satt.">
+      <Section id="s-kontakt" title="Kontakt på kundesiden (Chen Media)" intro="Din kontaktperson som vises nederst på kundesiden. Påkrevd e-post brukes også som varseladresse hvis NOTIFY_EMAIL ikke er satt. Ikke å forveksle med «Kontakt hos bedriften» øverst.">
         <div className="grid gap-5 sm:grid-cols-2">
-          <Text id="ct-name" label="Kontaktperson" value={c.contactName} max={100} onChange={(v) => patch({ contactName: v })} />
-          <Text id="ct-mail" label="Kontakt-e-post" value={c.contactEmail} max={200} onChange={(v) => patch({ contactEmail: v })} />
+          <Text id="ct-name" label="Kontaktperson hos Chen Media" value={c.contactName} max={100} onChange={(v) => patch({ contactName: v })} />
+          <Text id="ct-mail" label="Chen Medias e-post" value={c.contactEmail} max={200} onChange={(v) => patch({ contactEmail: v })} />
         </div>
       </Section>
 

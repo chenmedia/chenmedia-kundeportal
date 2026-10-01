@@ -6,14 +6,19 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { SESSION_COOKIE, login, logout, requireAdmin } from "@/server/admin-auth";
 import { clientIp } from "@/server/rate-limit";
-import { assetBelongsToCustomer, createCustomer, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
+import { parseContactForm } from "@/lib/customer-contact";
+import { assetBelongsToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
 import { deleteInquiry, updateInquiryFollowUp } from "@/server/inquiries";
 import { contentSchema } from "@/lib/content";
 import { STATUSES } from "@/lib/inquiry";
 import { processJob } from "@/server/email";
 import { logError } from "@/server/log";
 
-export interface ActionState { ok?: boolean; error?: string; problems?: string[] }
+export interface ActionState { ok?: boolean; error?: string; problems?: string[]; fieldErrors?: Record<string, string>; values?: Record<string, string> }
+
+function formValues(fd: FormData, keys: string[]): Record<string, string> {
+  return Object.fromEntries(keys.map((k) => [k, String(fd.get(k) ?? "")]));
+}
 
 export async function loginAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const email = String(fd.get("email") ?? "").trim();
@@ -39,10 +44,16 @@ export async function logoutAction() {
 export async function createCustomerAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin();
   const name = String(fd.get("name") ?? "").trim();
-  if (name.length < 2) return { error: "Skriv kundenavn (minst 2 tegn)." };
+  // React nullstiller skjemaet etter en handling, så innskrevne verdier sendes tilbake og settes som defaultValue.
+  const values = formValues(fd, ["name", "contactName", "contactEmail", "contactPhone"]);
+  const contact = parseContactForm(fd);
+  const fieldErrors: Record<string, string> = {};
+  if (name.length < 2) fieldErrors.name = "Skriv kundenavn (minst 2 tegn).";
+  if (!contact.ok) Object.assign(fieldErrors, contact.fieldErrors);
+  if (Object.keys(fieldErrors).length || !contact.ok) return { error: "Rett opp feltene under.", fieldErrors, values };
   let id: string;
   try {
-    id = (await createCustomer(name)).id;
+    id = (await createCustomer(name, contact.ok ? contact.contact : undefined)).id;
   } catch (e) {
     logError("customer.create", e);
     const missingSecret = e instanceof Error && e.message.includes("APP_SECRET");
@@ -134,4 +145,19 @@ export async function retryEmailAction(jobId: string, inquiryId: string): Promis
   await processJob(jobId);
   revalidatePath(`/admin/foresporsler/${inquiryId}`);
   revalidatePath("/admin");
+}
+
+export async function updateContactAction(customerId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const contact = parseContactForm(fd);
+  if (!contact.ok) return { error: "Rett opp feltene under.", fieldErrors: contact.fieldErrors, values: formValues(fd, ["contactName", "contactEmail", "contactPhone"]) };
+  try {
+    await updateCustomerContact(customerId, contact.contact);
+  } catch (e) {
+    logError("customer.contact", e, { customerId });
+    return { error: "Kunne ikke lagre kontaktpersonen. Prøv igjen." };
+  }
+  revalidatePath(`/admin/kunder/${customerId}`);
+  revalidatePath("/admin");
+  return { ok: true };
 }

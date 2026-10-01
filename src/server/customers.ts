@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
+import { EMPTY_CONTACT, type CustomerContact } from "@/lib/customer-contact";
 import { generateToken, sha256, encryptText, decryptText } from "./crypto";
 import { Content, contentSchema, emptyContent, parseContent, canonical, publishProblems } from "@/lib/content";
 
@@ -8,11 +9,12 @@ function customerUrl(token: string): string {
   return `${base}/k/${token}`;
 }
 
-export async function createCustomer(name: string) {
+export async function createCustomer(name: string, contact: CustomerContact = EMPTY_CONTACT) {
   const token = generateToken();
   return db.customer.create({
     data: {
       name: name.trim(),
+      ...contact,
       tokenHash: sha256(token),
       tokenEnc: encryptText(token),
       draft: { create: { content: JSON.stringify(emptyContent()) } },
@@ -148,4 +150,8 @@ export async function customerExists(id: string): Promise<boolean> {
 export async function assetBelongsToCustomer(assetId: string, customerId: string): Promise<boolean> {
   const a = await db.mediaAsset.findUnique({ where: { id: assetId }, select: { customerId: true } });
   return a?.customerId === customerId;
+}
+
+export async function updateCustomerContact(id: string, contact: CustomerContact) {
+  await db.customer.update({ where: { id }, data: contact });
 }

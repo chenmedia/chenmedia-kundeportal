@@ -61,7 +61,10 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                   const status = !c.active ? "Deaktivert" : c.currentVersion ? "Publisert" : "Ikke publisert";
                   return (
                     <tr key={c.id}>
-                      <td className="font-semibold">{c.name}</td>
+                      <td>
+                        <span className="font-semibold">{c.name}</span>
+                        {(c.contactName || c.contactEmail) && <span className="block text-sm text-muted">{c.contactName || c.contactEmail}</span>}
+                      </td>
                       <td><span className="badge">{status}</span></td>
                       <td>{c.currentVersion?.label ?? "–"}</td>
                       <td>{c.currentVersion ? formatDateTime(c.currentVersion.publishedAt) : "–"}</td>
