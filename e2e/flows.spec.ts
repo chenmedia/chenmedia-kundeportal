@@ -29,6 +29,8 @@ test("kunde: viser pakker, velger pakke, sender forespørsel og admin ser den", 
   await page.getByRole("button", { name: /Forespør – Medium event/ }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByLabel("Pakke", { exact: true })).toHaveValue("pkg_medium");
+  await expect(page.getByTestId("selected-package")).toContainText("Medium event");
+  await expect(page.getByTestId("selected-package")).toContainText(/Fastpris 10\s000\skr eks\. mva\./);
   await expect(page.locator("#foresporsel-heading")).toBeFocused();
 
   await page.getByRole("button", { name: "Send forespørsel" }).click();
@@ -228,4 +230,46 @@ test("skjemaet ligger bak knapp: Esc lukker, teksten beholdes, og flytende knapp
   await expect(sticky).toHaveClass(/sticky-cta--on/);
   await sticky.getByRole("button").click();
   await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("admin: kunde kan opprettes med bare navn på kontaktperson, og kontakten kan endres", async ({ page }) => {
+  await adminLogin(page);
+  await page.getByRole("link", { name: "Opprett kunde" }).click();
+  await page.waitForURL("**/admin/kunder/ny");
+  await page.waitForLoadState("networkidle"); // vent til overgangen er ferdig før vi skriver
+  await page.getByLabel("Kundenavn").fill("Kontakttest AS");
+  // Ugyldig e-post avvises, men tom e-post er greit
+  await page.getByLabel("E-post (valgfritt)").fill("ikke-epost");
+  await page.getByRole("button", { name: "Opprett kunde" }).click();
+  await expect(page.getByText("Skriv en gyldig e-postadresse, eller la feltet stå tomt.")).toBeVisible();
+  // Innskrevne verdier beholdes ved valideringsfeil (React nullstiller ellers skjemaet)
+  await expect(page.getByLabel("Kundenavn")).toHaveValue("Kontakttest AS");
+  await expect(page.getByLabel("E-post (valgfritt)")).toHaveValue("ikke-epost");
+  await page.getByLabel("E-post (valgfritt)").fill("");
+  await page.getByLabel("Kontaktperson (valgfritt)").fill("Ola Kontakt");
+  await page.getByRole("button", { name: "Opprett kunde" }).click();
+
+  // På redigeringssiden: kontakt er lagret, og e-post/telefon er tomme
+  await expect(page.getByRole("heading", { name: "Kontakttest AS" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByLabel("Kontaktperson (valgfritt)")).toHaveValue("Ola Kontakt");
+  await expect(page.getByLabel("E-post (valgfritt)")).toHaveValue("");
+
+  await page.getByLabel("E-post (valgfritt)").fill("ola@kontakt.no");
+  await page.getByRole("button", { name: "Lagre kontakt" }).click();
+  await expect(page.getByText("Kontakten er lagret.")).toBeVisible();
+
+  // Oversikten viser kontaktpersonen under kundenavnet
+  await page.goto("/admin");
+  await expect(page.getByRole("row", { name: /Kontakttest AS/ })).toContainText("Ola Kontakt");
+});
+
+test("kontaktperson hos bedriften vises ikke på kundesiden", async ({ page, browser }) => {
+  await adminLogin(page);
+  await page.getByRole("link", { name: "Åpne OBOS" }).click();
+  await page.getByLabel("Kontaktperson (valgfritt)").fill("Skjult Person");
+  await page.getByRole("button", { name: "Lagre kontakt" }).click();
+  await expect(page.getByText("Kontakten er lagret.")).toBeVisible();
+  const cust = await (await browser.newContext()).newPage();
+  await cust.goto(await obosLink());
+  await expect(cust.getByText("Skjult Person")).toHaveCount(0);
 });

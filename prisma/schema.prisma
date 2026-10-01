@@ -31,6 +31,10 @@ model Customer {
   name             String
   active           Boolean          @default(true)
   needsRename      Boolean          @default(false)
+  // Kontaktperson hos bedriften. Valgfri, kun for intern bruk i admin (vises aldri på kundesiden).
+  contactName      String?
+  contactEmail     String?
+  contactPhone     String?
   tokenHash        String           @unique
   tokenEnc         String
   currentVersionId String?          @unique

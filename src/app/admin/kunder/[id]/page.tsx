@@ -7,6 +7,7 @@ import { formatDateTime } from "@/lib/format";
 import { getAdminCustomerLink } from "@/server/customers";
 import { DraftEditor } from "@/components/DraftEditor";
 import { CustomerControls } from "@/components/CustomerControls";
+import { CompanyContactCard } from "@/components/CompanyContactCard";
 
 export default async function CustomerEditPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -30,6 +31,8 @@ export default async function CustomerEditPage({ params }: { params: Promise<{ i
           {c.currentVersion ? <>Aktiv versjon v{c.currentVersion.number} ({c.currentVersion.label}), publisert {formatDateTime(c.currentVersion.publishedAt)}.</> : "Ingenting er publisert ennå."}
         </p>
       </div>
+
+      <CompanyContactCard customerId={c.id} contact={{ contactName: c.contactName, contactEmail: c.contactEmail, contactPhone: c.contactPhone }} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px] items-start">
         <DraftEditor
