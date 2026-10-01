@@ -6,7 +6,8 @@
   --color-cream: #fbf8d0;
   --color-paper: #ffffff;
   --color-accent: #c25a2e;
-  --color-accent-dark: #a24a24;
+  --color-accent-strong: #b85228; /* knapper: hvit tekst når WCAG AA (4,9:1) */
+  --color-accent-dark: #9c4422;
   --color-muted: #55534a; /* svart 70 % på krem/hvit, AA-kontrast */
   --color-line: #e4e0b8;
   --color-line-strong: #111111;
@@ -72,7 +73,7 @@ body.admin { background: #f7f6ec; }
   border: 2px solid transparent; cursor: pointer; text-decoration: none;
   transition: background-color .15s, color .15s;
 }
-.btn-accent { background: var(--color-accent); color: #fff; }
+.btn-accent { background: var(--color-accent-strong); color: #fff; }
 .btn-accent:hover { background: var(--color-accent-dark); }
 .btn-dark { background: var(--color-ink); color: #fff; }
 .btn-dark:hover { background: #2b2b2b; }
@@ -113,7 +114,7 @@ table.tbl th, table.tbl td { padding: 12px 6px; border-bottom: 1px solid var(--c
 .skip-link:focus { left: 8px; }
 
 /* Lange norske sammensetninger («EVENTFOTOGRAFERING») skal aldri sprenge bredden */
-.hero-title { font-size: clamp(22px, 6.3vw, 44px); overflow-wrap: anywhere; }
+.hero-title { font-size: clamp(22px, 6.3vw, 44px); overflow-wrap: anywhere; text-wrap: balance; }
 @media (min-width: 1024px) { .hero-title { font-size: 42px; } }
 
 /* ---------- Kundeside: struktur og detaljer ---------- */

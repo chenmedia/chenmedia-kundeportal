@@ -29,6 +29,8 @@ test("kunde: viser pakker, velger pakke, sender forespørsel og admin ser den", 
   await page.getByRole("button", { name: /Forespør – Medium event/ }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByLabel("Pakke", { exact: true })).toHaveValue("pkg_medium");
+  await expect(page.getByTestId("selected-package")).toContainText("Medium event");
+  await expect(page.getByTestId("selected-package")).toContainText(/Fastpris 10\s000\skr eks\. mva\./);
   await expect(page.locator("#foresporsel-heading")).toBeFocused();
 
   await page.getByRole("button", { name: "Send forespørsel" }).click();
