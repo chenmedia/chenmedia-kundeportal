@@ -316,8 +316,13 @@ test("utskrift: knapper og dialog skjules, priser og vilkår beholdes", async ({
   await expect(page.getByRole("button", { name: /Forespør – Medium event/ })).toBeHidden();
   await expect(page.getByText(/^10\s000\skr$/)).toBeVisible();
   await expect(page.getByText("Betalingsfrist: 30 dager.")).toBeVisible();
-  // Bunnteksten skal være lesbar (ikke hvit på hvit), og prislisten får plass på én A4-side
-  await expect(page.locator(".site-footer h2").first()).toHaveCSS("color", "rgb(17, 17, 17)");
+  // PDF-en følger nettsidens uttrykk: kremfarget side og svart bunnfelt med lys tekst (lesbar, ikke hvit på hvitt)
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(251, 248, 208)");
+  await expect(page.locator(".site-footer")).toHaveCSS("background-color", "rgb(17, 17, 17)");
+  await expect(page.locator(".site-footer h2").first()).toHaveCSS("color", /rgba?\(255, 255, 255/);
+  // Pakkene står side om side som på nettsiden, og prislisten får plass på én A4-side
+  const tops = await page.locator(".pkg-card").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1);
   const pdf = await page.pdf({ format: "A4", preferCSSPageSize: true });
   expect(pdf.length).toBeGreaterThan(10_000);
   expect((pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length).toBe(1);
