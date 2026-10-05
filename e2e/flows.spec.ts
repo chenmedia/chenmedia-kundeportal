@@ -80,9 +80,18 @@ test("admin: utkast er usynlig for kunde til publisering, deretter ny pris på s
   await adminLogin(page);
   await page.getByRole("link", { name: "Åpne OBOS" }).click();
 
-  await page.getByLabel("Pris (kr, eks. mva.)").first().fill("6500");
+  // Norsk tusenskille: «16.000» er 16 000 kr (ikke 16 kr), og tolket beløp vises under feltet
+  const price = page.getByLabel("Pris (kr, eks. mva.)").first();
+  await price.fill("16.000");
+  await expect(page.getByText(/^= 16\s000\skr$/).first()).toBeVisible();
+  await price.fill("6500");
+  await expect(page.getByText(/^= 6\s500\skr$/).first()).toBeVisible();
+  // Publisering sperres mens det finnes ulagrede endringer
+  await expect(page.getByRole("button", { name: "Publiser" })).toBeDisabled();
+  await expect(page.getByText("Du har ulagrede endringer. Lagre utkastet før du publiserer.")).toBeVisible();
   await page.getByRole("button", { name: "Lagre utkast" }).first().click();
   await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publiser" })).toBeEnabled();
 
   const cust = await (await browser.newContext()).newPage();
   await cust.goto(link);
@@ -138,6 +147,10 @@ test("kunde med foreldet side får beskjed om ny versjon og beholder teksten", a
   const admin = await (await browser.newContext()).newPage();
   await adminLogin(admin);
   await admin.getByRole("link", { name: "Åpne OBOS" }).click();
+  // Publisering krever en endring: et uendret utkast kan ikke publiseres på nytt
+  await admin.getByLabel("Pris (kr, eks. mva.)").first().fill("6600");
+  await admin.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(admin.getByText("Utkastet er lagret.").first()).toBeVisible();
   admin.once("dialog", (d) => d.accept());
   await admin.getByRole("button", { name: "Publiser" }).click();
   await expect(admin.getByText("Publisert. Kundelenken viser nå den nye versjonen.")).toBeVisible();
