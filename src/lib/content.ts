@@ -2,6 +2,7 @@ import { z } from "zod";
 
 /** Priser lagres som heltall i øre. */
 export const MAX_PACKAGES = 6;
+export const MAX_GALLERY = 6;
 
 const optionalText = (max: number) => z.string().trim().max(max).default("");
 
@@ -18,6 +19,9 @@ const packageSchema = z.object({
   usage: optionalText(120),
   delivery: optionalText(120),
   custom: z.boolean().default(false),
+  /** Valgfritt illustrasjonsbilde øverst på pakkekortet */
+  imageId: z.string().nullable().default(null),
+  imageAlt: optionalText(200),
 });
 export type PackageContent = z.infer<typeof packageSchema>;
 
@@ -41,6 +45,14 @@ const addonSchema = z.object({
 });
 export type AddonContent = z.infer<typeof addonSchema>;
 
+const galleryItemSchema = z.object({
+  id: z.string().min(1),
+  imageId: z.string().min(1),
+  /** Tom = dekorativt bilde (skjules for skjermlesere) */
+  alt: optionalText(200),
+});
+export type GalleryItem = z.infer<typeof galleryItemSchema>;
+
 export const contentSchema = z.object({
   introTitle: optionalText(150), // tomt = «Eventfotografering for [kunde]»
   introText: z.string().trim().max(800).default(""),
@@ -51,6 +63,8 @@ export const contentSchema = z.object({
   validityText: optionalText(200),
   contactName: optionalText(100),
   contactEmail: optionalText(200),
+  galleryTitle: optionalText(80), // tomt = «Bilder fra oppdrag»
+  gallery: z.array(galleryItemSchema).max(MAX_GALLERY).default([]),
   packages: z.array(packageSchema).max(MAX_PACKAGES).default([]),
   addons: z.array(addonSchema).max(30).default([]),
   practical: z.array(z.string().trim().max(300)).max(20).default([]),
@@ -60,6 +74,24 @@ export type Content = z.infer<typeof contentSchema>;
 export const DEFAULT_INTRO =
   "Her finner du deres avtalte fotopakker og priser. Send oss informasjon om arrangementet, så avklarer vi tilgjengelighet og detaljer.";
 export const DEFAULT_CTA = "Send et fotobehov";
+export const DEFAULT_GALLERY_TITLE = "Bilder fra oppdrag";
+
+/** Alle bilder innholdet bruker (hero, pakker, galleri), uten duplikater. Styrer hva kundelenken får servere. */
+export function contentImageIds(content: Content): string[] {
+  const ids = [content.heroImageId, ...content.packages.map((p) => p.imageId), ...content.gallery.map((g) => g.imageId)];
+  return [...new Set(ids.filter((id): id is string => !!id))];
+}
+
+/** Bytter bildereferanser (brukes når en kunde dupliseres og bildene får nye ID-er). Ukjente referanser fjernes. */
+export function remapImageIds(content: Content, map: (id: string) => string | undefined): Content {
+  const m = (id: string | null) => (id ? map(id) ?? null : null);
+  return {
+    ...content,
+    heroImageId: m(content.heroImageId),
+    packages: content.packages.map((p) => ({ ...p, imageId: m(p.imageId) })),
+    gallery: content.gallery.flatMap((g) => { const id = m(g.imageId); return id ? [{ ...g, imageId: id }] : []; }),
+  };
+}
 
 export function newId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;

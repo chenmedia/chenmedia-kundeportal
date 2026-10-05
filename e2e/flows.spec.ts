@@ -232,6 +232,52 @@ test("skjemaet ligger bak knapp: Esc lukker, teksten beholdes, og flytende knapp
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
+test("admin legger inn galleri og pakkebilde, kunden ser dem, og utskriften skjuler dem", async ({ page, browser }) => {
+  const link = await obosLink();
+  await adminLogin(page);
+  await page.getByRole("link", { name: "Åpne OBOS" }).click();
+
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  await page.getByLabel("Last opp bilde").setInputFiles([
+    { name: "galleri-1.png", mimeType: "image/png", buffer: png },
+    { name: "galleri-2.png", mimeType: "image/png", buffer: png },
+  ]);
+  await expect(page.getByRole("list", { name: "Bildebibliotek" }).getByText("galleri-2.png")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("list", { name: "Bildebibliotek" }).getByText("galleri-1.png")).toBeVisible();
+
+  await page.getByRole("button", { name: "+ Legg til galleribilde" }).click();
+  await page.getByRole("button", { name: "+ Legg til galleribilde" }).click();
+  await page.getByLabel("Beskrivelse av bildet").first().fill("Foredrag på scenen");
+  await page.getByLabel("Beskrivelse av bildet").nth(1).fill("Mingling etter programmet");
+  await page.getByLabel("Overskrift (valgfritt)").fill("Fra tidligere arrangementer");
+  await page.getByLabel("Bilde på pakkekortet (valgfritt)").first().selectOption({ label: "galleri-1.png" });
+  await page.getByLabel("Beskrivelse av pakkebildet").fill("Fotograf i arbeid");
+
+  await page.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Publiser" }).click();
+  await expect(page.getByText("Publisert. Kundelenken viser nå den nye versjonen.")).toBeVisible();
+
+  const cust = await (await browser.newContext()).newPage();
+  await cust.goto(link);
+  await expect(cust.getByRole("heading", { name: "Fra tidligere arrangementer" })).toBeVisible();
+  const gallery = cust.locator("#galleri");
+  await expect(gallery.getByRole("img", { name: "Foredrag på scenen" })).toBeVisible();
+  await expect(gallery.getByRole("img", { name: "Mingling etter programmet" })).toBeVisible();
+  const pkgImg = cust.getByRole("img", { name: "Fotograf i arbeid" });
+  await expect(pkgImg).toBeVisible();
+  // Bildene serveres via den beskyttede kunderuten og faktisk lastes
+  expect(await pkgImg.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
+  expect(await pkgImg.getAttribute("src")).toMatch(/^\/k\/[^/]+\/media\//);
+
+  // Utskrift: bildene skjules, og en side holder
+  await cust.emulateMedia({ media: "print" });
+  await expect(gallery).toBeHidden();
+  await expect(pkgImg).toBeHidden();
+  await cust.close();
+});
+
 test("utskrift: knapper og dialog skjules, priser og vilkår beholdes", async ({ page }) => {
   await page.goto(await obosLink());
   await expect(page.getByRole("button", { name: /Skriv ut eller lagre som PDF/ })).toBeVisible();
@@ -241,8 +287,11 @@ test("utskrift: knapper og dialog skjules, priser og vilkår beholdes", async ({
   await expect(page.getByRole("button", { name: /Forespør – Medium event/ })).toBeHidden();
   await expect(page.getByText(/^10\s000\skr$/)).toBeVisible();
   await expect(page.getByText("Betalingsfrist: 30 dager.")).toBeVisible();
-  const pdf = await page.pdf({ format: "A4" });
+  // Bunnteksten skal være lesbar (ikke hvit på hvit), og prislisten får plass på én A4-side
+  await expect(page.locator(".site-footer h2").first()).toHaveCSS("color", "rgb(17, 17, 17)");
+  const pdf = await page.pdf({ format: "A4", preferCSSPageSize: true });
   expect(pdf.length).toBeGreaterThan(10_000);
+  expect((pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length).toBe(1);
 });
 
 test("lenkeforhåndsvisning er nøytral: ingen kundenavn eller priser i metadata", async ({ page }) => {

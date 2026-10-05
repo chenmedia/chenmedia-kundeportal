@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { EMPTY_CONTACT, type CustomerContact } from "@/lib/customer-contact";
 import { generateToken, sha256, encryptText, decryptText } from "./crypto";
-import { Content, contentSchema, emptyContent, parseContent, canonical, publishProblems } from "@/lib/content";
+import { Content, contentSchema, emptyContent, parseContent, canonical, publishProblems, remapImageIds } from "@/lib/content";
 
 function customerUrl(token: string): string {
   const base = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -86,9 +86,9 @@ export async function duplicateCustomer(sourceId: string) {
     });
     idMap.set(a.id, copy.id);
   }
-  // Nye pakke-/tillegg-ID-er er ikke nødvendig, men bildereferansen må pekes om.
-  content.heroImageId = content.heroImageId ? idMap.get(content.heroImageId) ?? null : null;
-  await db.customerDraft.create({ data: { customerId: created.id, content: JSON.stringify(content) } });
+  // Nye pakke-/tillegg-ID-er er ikke nødvendig, men bildereferansene må pekes om.
+  const copied = remapImageIds(content, (id) => idMap.get(id));
+  await db.customerDraft.create({ data: { customerId: created.id, content: JSON.stringify(copied) } });
   return created;
 }
 
@@ -146,10 +146,11 @@ export async function customerExists(id: string): Promise<boolean> {
   return !!(await db.customer.findUnique({ where: { id }, select: { id: true } }));
 }
 
-/** Sant hvis bildet finnes og tilhører kunden. */
-export async function assetBelongsToCustomer(assetId: string, customerId: string): Promise<boolean> {
-  const a = await db.mediaAsset.findUnique({ where: { id: assetId }, select: { customerId: true } });
-  return a?.customerId === customerId;
+/** Sant hvis alle bildene finnes og tilhører kunden. */
+export async function assetsBelongToCustomer(assetIds: string[], customerId: string): Promise<boolean> {
+  if (assetIds.length === 0) return true;
+  const n = await db.mediaAsset.count({ where: { id: { in: assetIds }, customerId } });
+  return n === assetIds.length;
 }
 
 export async function updateCustomerContact(id: string, contact: CustomerContact) {

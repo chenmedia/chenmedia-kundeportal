@@ -7,9 +7,9 @@ import { z } from "zod";
 import { SESSION_COOKIE, login, logout, requireAdmin } from "@/server/admin-auth";
 import { clientIp } from "@/server/rate-limit";
 import { parseContactForm } from "@/lib/customer-contact";
-import { assetBelongsToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
+import { assetsBelongToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
 import { deleteInquiry, updateInquiryFollowUp } from "@/server/inquiries";
-import { contentSchema } from "@/lib/content";
+import { contentImageIds, contentSchema } from "@/lib/content";
 import { STATUSES } from "@/lib/inquiry";
 import { processJob } from "@/server/email";
 import { logError } from "@/server/log";
@@ -73,9 +73,7 @@ export async function saveDraftAction(customerId: string, name: string, contentJ
     return { error: "Innholdet er ugyldig. Kontroller feltene og prøv igjen." };
   }
   // Bilder må tilhøre denne kunden.
-  if (parsed.heroImageId) {
-    if (!(await assetBelongsToCustomer(parsed.heroImageId, customerId))) return { error: "Bildet tilhører ikke denne kunden." };
-  }
+  if (!(await assetsBelongToCustomer(contentImageIds(parsed), customerId))) return { error: "Et av bildene tilhører ikke denne kunden." };
   await saveDraft(customerId, nm, parsed);
   revalidatePath(`/admin/kunder/${customerId}`);
   return { ok: true };
