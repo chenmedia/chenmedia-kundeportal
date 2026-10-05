@@ -1,15 +1,19 @@
 import crypto from "node:crypto";
 import sharp from "sharp";
-import { imageSize } from "image-size";
 import { logError } from "./log";
 import { db } from "./db";
 import { KEY_RE, getStore } from "./storage";
 
 export const MAX_UPLOAD = 10 * 1024 * 1024;
-const HEADER_BYTES = 128 * 1024;
 /** Lengste side på lagret bilde. Et heltoppbilde trenger aldri mer enn dette. */
 export const MAX_DIMENSION = 1600;
-const ALLOWED: Record<string, string> = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
+/**
+ * Formater vi leser (kontrollert mot filens faktiske innhold, ikke filendelsen). Alt konverteres til WebP,
+ * så AVIF, HEIF, GIF og TIFF kan godtas selv om nettleseren bare tilbyr JPEG/PNG/WebP i velgeren.
+ * Mange «.jpg»-filer er i virkeligheten AVIF eller WebP lastet ned fra nettsider.
+ */
+const READABLE = new Set(["jpeg", "png", "webp", "avif", "heif", "gif", "tiff"]);
+const UNSUPPORTED = "Filen er ikke et gyldig bilde, eller formatet støttes ikke. Bruk JPEG, PNG eller WebP.";
 
 export type UploadResult = { ok: true; id: string } | { ok: false; error: string };
 
@@ -35,23 +39,24 @@ export async function completeUpload(customerId: string, key: string, originalNa
     await store.remove(key);
     return { ok: false, error };
   };
-  const head = await store.readRange(key, HEADER_BYTES);
+  const head = await store.readRange(key, 1);
   if (!head || head.total === 0) return fail("Filen er tom eller ble ikke lastet opp.");
   if (head.total > MAX_UPLOAD) return fail("Filen er større enn 10 MB.");
+  // Hele filen leses (maks 10 MB): sharp finner formatet fra innholdet, også når JPEG har mer enn 128 KB
+  // metadata før selve bildet.
+  const original = await store.read(key);
+  if (!original) return fail("Filen ble ikke funnet etter opplasting.");
   let info;
   try {
-    info = imageSize(head.bytes);
+    info = await sharp(original, { limitInputPixels: 100_000_000 }).metadata();
   } catch {
-    return fail("Filen er ikke et gyldig bilde. Bruk JPEG, PNG eller WebP.");
+    return fail(UNSUPPORTED);
   }
-  const mime = ALLOWED[info.type ?? ""];
-  if (!mime || !info.width || !info.height) return fail("Bare JPEG, PNG og WebP er tillatt.");
+  if (!info.format || !READABLE.has(info.format) || !info.width || !info.height) return fail(UNSUPPORTED);
   if (await db.mediaAsset.findFirst({ where: { storageKey: key, customerId: { not: customerId } } })) {
     return { ok: false, error: "Ugyldig opplasting." };
   }
   // Skaler ned og konverter til WebP. Fjerner også metadata (EXIF, inkl. GPS-posisjon) og retter opp rotasjon.
-  const original = await store.read(key);
-  if (!original) return fail("Filen ble ikke funnet etter opplasting.");
   let processed: { data: Buffer; width: number; height: number };
   try {
     const { data, info: out } = await sharp(original, { failOn: "error", limitInputPixels: 100_000_000 })
@@ -61,8 +66,12 @@ export async function completeUpload(customerId: string, key: string, originalNa
       .toBuffer({ resolveWithObject: true });
     processed = { data, width: out.width, height: out.height };
   } catch (e) {
-    logError("media.process", e);
-    return fail("Kunne ikke behandle bildet. Prøv en annen fil (JPEG, PNG eller WebP).");
+    logError("media.process", e, { format: info.format });
+    return fail(
+      info.format === "heif"
+        ? "Kunne ikke lese bildet (HEIC fra iPhone støttes ikke). Eksporter det som JPEG eller PNG og prøv igjen."
+        : "Kunne ikke behandle bildet. Prøv en annen fil (JPEG, PNG eller WebP).",
+    );
   }
   const finalKey = newStorageKey();
   try {

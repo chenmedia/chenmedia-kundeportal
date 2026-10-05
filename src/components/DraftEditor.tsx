@@ -134,7 +134,6 @@ export function DraftEditor(props: {
   /** Laster opp én fil. Returnerer ID-en ved suksess. */
   async function uploadOne(file: File): Promise<string | null> {
     if (file.size > 10 * 1024 * 1024) { setUploadErr(`${file.name}: filen er større enn 10 MB.`); return null; }
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setUploadErr(`${file.name}: bare JPEG, PNG og WebP er tillatt.`); return null; }
     const prep = await (await fetch("/api/admin/media/prepare", { method: "POST" })).json();
     if (!prep.ok) { setUploadErr(prep.error ?? "Opplastingen feilet."); return null; }
     // Lokalt: rå PUT til egen rute. Drift: signert opplasting rett til Supabase Storage.
@@ -206,7 +205,7 @@ export function DraftEditor(props: {
       <Section id="s-bilder" title="Bilder" intro="Last opp bilder til biblioteket og velg hvor de skal brukes: ett eventbilde øverst, et galleri mellom pakker og tillegg, og eventuelt ett bilde per pakke. JPEG, PNG eller WebP, maks 10 MB per bilde. Uten bilder vises en pen plassholder.">
         <div>
           <label htmlFor="upload" className="field-label">Last opp bilde</label>
-          <input id="upload" type="file" multiple accept="image/jpeg,image/png,image/webp" className="input !py-2" disabled={uploading}
+          <input id="upload" type="file" multiple accept="image/*" className="input !py-2" disabled={uploading}
             onChange={(e) => { const f = Array.from(e.target.files ?? []); if (f.length) void upload(f); e.target.value = ""; }} />
           <p className="field-hint">Du kan velge flere bilder samtidig.</p>
           {uploading && <p role="status" className="field-hint">Laster opp …</p>}

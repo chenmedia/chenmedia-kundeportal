@@ -84,4 +84,40 @@ describe("bildebehandling", () => {
     const r = await saveUpload(c.id, broken, "odelagt.png");
     expect(r.ok).toBe(false);
   });
+
+  it("godtar JPEG med mer enn 128 KB metadata før bildedata", async () => {
+    const sharp = (await import("sharp")).default;
+    const plain = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#c25a2e" } }).jpeg().toBuffer();
+    const segments = Array.from({ length: 3 }, () => {
+      const body = Buffer.alloc(60000, 1);
+      const len = Buffer.alloc(2);
+      len.writeUInt16BE(body.length + 2);
+      return Buffer.concat([Buffer.from([0xff, 0xe2]), len, body]);
+    });
+    const heavy = Buffer.concat([plain.subarray(0, 2), ...segments, plain.subarray(2)]);
+    expect(heavy.length).toBeGreaterThan(128 * 1024);
+    const c = await makeCustomer("Tung header AS");
+    const r = await saveUpload(c.id, heavy, "tung.jpg");
+    expect(r.ok).toBe(true);
+  });
+
+  it("godtar AVIF, GIF og TIFF selv med .jpg-endelse, og lagrer som WebP", async () => {
+    const sharp = (await import("sharp")).default;
+    const base = sharp({ create: { width: 400, height: 300, channels: 3, background: "#c25a2e" } });
+    const c = await makeCustomer("Forkledd AS");
+    const { db } = await import("@/server/db");
+    for (const buf of [await base.clone().avif().toBuffer(), await base.clone().gif().toBuffer(), await base.clone().tiff().toBuffer()]) {
+      const r = await saveUpload(c.id, buf, "logo.jpg");
+      if (!r.ok) throw new Error(r.error);
+      expect((await db.mediaAsset.findUniqueOrThrow({ where: { id: r.id } })).mimeType).toBe("image/webp");
+    }
+  });
+
+  it("avviser SVG og PDF med bildeendelse med en tydelig melding", async () => {
+    const c = await makeCustomer("Avvist AS");
+    const pdf = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n");
+    const r = await saveUpload(c.id, pdf, "kontrakt.jpg");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/støttes ikke/);
+  });
 });
