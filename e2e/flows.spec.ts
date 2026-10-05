@@ -1,5 +1,6 @@
 import { test, expect, Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import sharp from "sharp";
 import { E2E_ENV } from "../playwright.config";
 
 async function obosLink(): Promise<string> {
@@ -230,6 +231,34 @@ test("skjemaet ligger bak knapp: Esc lukker, teksten beholdes, og flytende knapp
   await expect(sticky).toHaveClass(/sticky-cta--on/);
   await sticky.getByRole("button").click();
   await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("admin: store bilder og feilmerkede filer komprimeres til WebP (maks 1600 px) før opplasting", async ({ page }) => {
+  await adminLogin(page);
+  await page.getByRole("link", { name: "Åpne OBOS" }).click();
+
+  const base = sharp({ create: { width: 3200, height: 2000, channels: 3, background: "#808080", noise: { type: "gaussian", mean: 128, sigma: 60 } } });
+  const bigJpeg = await base.clone().jpeg({ quality: 95 }).toBuffer();
+  expect(bigJpeg.length).toBeGreaterThan(1_000_000);
+  // AVIF som utgir seg for å være JPEG (typisk for bilder lastet ned fra nettsider)
+  const disguised = await sharp({ create: { width: 400, height: 300, channels: 3, background: "#c25a2e" } }).avif().toBuffer();
+
+  await page.getByLabel("Last opp bilde").setInputFiles([
+    { name: "stort-bilde.jpg", mimeType: "image/jpeg", buffer: bigJpeg },
+    { name: "feilmerket.jpg", mimeType: "image/jpeg", buffer: disguised },
+  ]);
+  const library = page.getByRole("list", { name: "Bildebibliotek" });
+  await expect(library.getByText("feilmerket.jpg")).toBeVisible({ timeout: 30_000 });
+  await expect(library.getByText("stort-bilde.jpg")).toBeVisible();
+  await expect(page.locator("p[role=alert]")).toHaveCount(0); // ingen opplastingsfeil
+
+  const src = await library.locator("li", { hasText: "stort-bilde.jpg" }).locator("img").getAttribute("src");
+  const res = await page.request.get(src!);
+  expect(res.headers()["content-type"]).toBe("image/webp");
+  const body = await res.body();
+  const meta = await sharp(body).metadata();
+  expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBeLessThanOrEqual(1600);
+  expect(body.length).toBeLessThan(bigJpeg.length / 2);
 });
 
 test("admin legger inn galleri og pakkebilde, kunden ser dem, og utskriften skjuler dem", async ({ page, browser }) => {

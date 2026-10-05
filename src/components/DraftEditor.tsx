@@ -52,6 +52,30 @@ function ImageSelect({ id, label, value, assets, onChange, noneLabel }: { id: st
   );
 }
 
+const MAX_EDGE = 1600; // samme grense som serveren (MAX_DIMENSION i server/media.ts)
+
+/**
+ * Skalerer ned og komprimerer til WebP i nettleseren før opplasting. Nettleseren leser bildet etter innhold,
+ * så feil endelse eller MIME-type spiller ingen rolle, og filen som lastes opp blir liten.
+ * Gir null hvis nettleseren ikke kan lese eller kode bildet; da lastes originalen opp som den er.
+ */
+async function compressToWebp(file: File): Promise<File | null> {
+  try {
+    const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, MAX_EDGE / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bmp.width * scale));
+    canvas.height = Math.max(1, Math.round(bmp.height * scale));
+    canvas.getContext("2d")?.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.82));
+    if (!blob || blob.type !== "image/webp") return null; // eldre Safari kan ikke kode WebP
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".webp", { type: "image/webp" });
+  } catch {
+    return null;
+  }
+}
+
 function Section({ id, title, children, intro }: { id: string; title: string; children: React.ReactNode; intro?: string }) {
   return (
     <section aria-labelledby={id} className="card p-6 grid gap-5">
@@ -134,16 +158,23 @@ export function DraftEditor(props: {
   /** Laster opp én fil. Returnerer ID-en ved suksess. */
   async function uploadOne(file: File): Promise<string | null> {
     if (file.size > 10 * 1024 * 1024) { setUploadErr(`${file.name}: filen er større enn 10 MB.`); return null; }
+    const compressed = await compressToWebp(file);
+    // Lagringen tar bare imot JPEG, PNG og WebP. Kan nettleseren ikke komprimere, må originalen være en av dem.
+    if (!compressed && !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setUploadErr(`${file.name}: nettleseren kunne ikke lese bildet. Eksporter det som JPEG eller PNG og prøv igjen.`);
+      return null;
+    }
+    const upload = compressed ?? file;
     const prep = await (await fetch("/api/admin/media/prepare", { method: "POST" })).json();
     if (!prep.ok) { setUploadErr(prep.error ?? "Opplastingen feilet."); return null; }
     // Lokalt: rå PUT til egen rute. Drift: signert opplasting rett til Supabase Storage.
     let put: Response;
     if (prep.kind === "local") {
-      put = await fetch(prep.uploadUrl, { method: "PUT", body: file });
+      put = await fetch(prep.uploadUrl, { method: "PUT", body: upload });
     } else {
       const fd = new FormData();
       fd.set("cacheControl", "3600");
-      fd.set("", file);
+      fd.set("", upload);
       put = await fetch(prep.uploadUrl, { method: "PUT", body: fd });
     }
     if (!put.ok) { setUploadErr("Opplastingen feilet. Prøv igjen."); return null; }
