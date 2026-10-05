@@ -284,6 +284,7 @@ export function DraftEditor(props: {
             <fieldset key={g.id} className="border border-line rounded-2xl p-4 grid gap-3">
               <legend className="title px-2">Galleribilde {i + 1}</legend>
               <ImageSelect id={`g${i}-img`} label="Bilde" value={g.imageId} assets={assets} noneLabel="Velg bilde" onChange={(v) => v && patchGallery(i, { imageId: v })} />
+              <Text id={`g${i}-cap`} label="Bildetekst (vises i galleriet)" value={g.caption} max={120} onChange={(v) => patchGallery(i, { caption: v })} hint="F.eks. «Summer Party 2026 · 4 timer». Valgfritt." />
               <Text id={`g${i}-alt`} label="Beskrivelse av bildet" value={g.alt} max={200} onChange={(v) => patchGallery(i, { alt: v })} hint="For skjermlesere. La stå tom hvis bildet bare er pynt." />
               <RowButtons i={i} len={c.gallery.length} what={`galleribilde ${i + 1}`}
                 onMove={(d) => patch({ gallery: move(c.gallery, i, d) })}
@@ -291,7 +292,7 @@ export function DraftEditor(props: {
             </fieldset>
           ))}
           <button type="button" className="btn btn-outline btn-sm self-start" disabled={c.gallery.length >= MAX_GALLERY || assets.length === 0}
-            onClick={() => patch({ gallery: [...c.gallery, { id: newId("gal"), imageId: assets[0].id, alt: "" }] })}>
+            onClick={() => patch({ gallery: [...c.gallery, { id: newId("gal"), imageId: assets[0].id, alt: "", caption: "" }] })}>
             + Legg til galleribilde
           </button>
           {assets.length === 0 && <p className="field-hint">Last opp bilder først.</p>}

@@ -1,4 +1,4 @@
-import type { Content, GalleryItem, PackageContent } from "@/lib/content";
+import type { Content, PackageContent } from "@/lib/content";
 import { DEFAULT_CTA, DEFAULT_GALLERY_TITLE, DEFAULT_INTRO } from "@/lib/content";
 import { formatAddonPrice, formatDate, formatPackagePrice } from "@/lib/format";
 import { Logo } from "./Logo";
@@ -7,6 +7,7 @@ import { OpenFormButton, SelectPackageButton } from "./SelectPackageButton";
 import { RequestDialog } from "./RequestDialog";
 import { StickyCta } from "./StickyCta";
 import { PrintButton } from "./PrintButton";
+import { Gallery } from "./Gallery";
 import { ArrowDown, CheckIcon } from "./Icons";
 
 export interface CustomerPageProps {
@@ -68,43 +69,6 @@ function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number;
         </div>
       </div>
     </li>
-  );
-}
-
-/**
- * Galleri med ulik komposisjon etter antall bilder (1 = bred banner, 3 og 5 = ett stort bilde + mindre,
- * ellers rutenett). På mobil legges alt i én eller to kolonner.
- */
-const GALLERY_LAYOUTS: Record<number, { grid: string; item: (i: number) => string }> = {
-  1: { grid: "grid-cols-1", item: () => "aspect-[16/10] md:aspect-[21/9]" },
-  2: { grid: "grid-cols-1 md:grid-cols-2", item: () => "aspect-[4/3]" },
-  3: {
-    grid: "grid-cols-2 md:grid-cols-3 md:grid-rows-2 md:h-[30rem]",
-    item: (i) => (i === 0 ? "col-span-2 aspect-[16/9] md:aspect-auto md:row-span-2" : "aspect-[4/3] md:aspect-auto"),
-  },
-  4: { grid: "grid-cols-2 md:grid-cols-4", item: () => "aspect-[4/3] md:aspect-[3/4]" },
-  5: {
-    grid: "grid-cols-2 md:grid-cols-4 md:grid-rows-2 md:h-[30rem]",
-    item: (i) => (i === 0 ? "col-span-2 aspect-[16/9] md:aspect-auto md:row-span-2" : "aspect-[4/3] md:aspect-auto"),
-  },
-  6: { grid: "grid-cols-2 md:grid-cols-3", item: () => "aspect-[4/3]" },
-};
-
-function Gallery({ items, title, mediaUrl }: { items: GalleryItem[]; title: string; mediaUrl: (assetId: string) => string }) {
-  const layout = GALLERY_LAYOUTS[Math.min(items.length, 6)];
-  return (
-    <section id="galleri" className="wrap py-10 md:py-14 gallery-section" aria-labelledby="galleri-title">
-      <p className="eyebrow mb-3">Eksempler</p>
-      <h2 id="galleri-title" className="section-title">{title}</h2>
-      <ul className={`mt-8 grid gap-3 md:gap-4 ${layout.grid}`}>
-        {items.map((g, i) => (
-          <li key={g.id} className={`relative min-h-0 overflow-hidden rounded-[20px] border border-line bg-ink ${layout.item(i)}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={mediaUrl(g.imageId)} alt={g.alt} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
 
@@ -185,7 +149,10 @@ export function CustomerPage(props: CustomerPageProps) {
 
         {/* Bilder fra oppdrag */}
         {content.gallery.length > 0 && (
-          <Gallery items={content.gallery} title={content.galleryTitle || DEFAULT_GALLERY_TITLE} mediaUrl={props.mediaUrl} />
+          <Gallery
+            items={content.gallery.map((g) => ({ id: g.id, src: props.mediaUrl(g.imageId), alt: g.alt, caption: g.caption }))}
+            title={content.galleryTitle || DEFAULT_GALLERY_TITLE}
+          />
         )}
 
         {/* Tillegg og praktisk */}
