@@ -4,7 +4,6 @@ import "@fontsource/open-sans/latin-600.css";
 import "@fontsource/open-sans/latin-700.css";
 import "@fontsource/merriweather/latin-400.css";
 import "@fontsource/space-mono/latin-700.css";
-import "@fontsource/space-mono/latin-400.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

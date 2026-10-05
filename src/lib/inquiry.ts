@@ -49,4 +49,6 @@ export interface InquirySnapshot {
   package: PackageContent | null;
   addons: AddonContent[];
   practical: string[];
+  /** Kontaktpersonen i avtalen (navnet i kvitteringen). Eldre forespørsler mangler feltet. */
+  contactName?: string;
 }

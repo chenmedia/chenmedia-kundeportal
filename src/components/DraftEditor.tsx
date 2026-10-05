@@ -229,7 +229,7 @@ export function DraftEditor(props: {
         <Text id="cta" label="Tekst på hovedknappen" value={c.ctaLabel} max={60} onChange={(v) => patch({ ctaLabel: v })} hint={`Standard: «${DEFAULT_CTA}».`} />
         <div className="grid gap-5 sm:grid-cols-2">
           <Text id="agr" label="Avtaleetikett" value={c.agreementLabel} max={60} onChange={(v) => patch({ agreementLabel: v })} hint="Eksempel: «Prisliste V2026». Påkrevd for publisering." />
-          <Text id="valid" label="Gyldighetstekst (valgfritt)" value={c.validityText} max={200} onChange={(v) => patch({ validityText: v })} hint="Vises bare hvis avtalt startdato faktisk er registrert her." />
+          <Text id="valid" label="Gyldighetstekst (valgfritt)" value={c.validityText} max={200} onChange={(v) => patch({ validityText: v })} hint="Vises nederst på kundesiden, under avtaleversjonen. La stå tom hvis det ikke gjelder." />
         </div>
       </Section>
 

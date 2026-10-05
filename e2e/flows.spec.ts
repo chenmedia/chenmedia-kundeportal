@@ -27,7 +27,7 @@ test("kunde: viser pakker, velger pakke, sender forespørsel og admin ser den", 
   // Skjemaet er skjult til man ber om det
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.getByLabel("Arrangementets navn eller type")).toBeHidden();
-  await page.getByRole("button", { name: /Forespør – Medium event/ }).click();
+  await page.getByRole("button", { name: /Forespør denne pakken – Medium event/ }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByLabel("Pakke", { exact: true })).toHaveValue("pkg_medium");
   await expect(page.getByTestId("selected-package")).toContainText("Medium event");
@@ -147,9 +147,22 @@ test("kunde med foreldet side får beskjed om ny versjon og beholder teksten", a
   await expect(page.getByLabel("Arrangementets navn eller type")).toHaveValue("Foreldet test");
   await expect(page.getByRole("button", { name: "Send forespørsel" })).toBeDisabled();
 
-  await page.getByRole("button", { name: "Jeg har gått gjennom den oppdaterte prislisten" }).click();
+  // Kunden kan lukke skjemaet for å se de nye prisene, og teksten beholdes når det åpnes igjen
+  await expect(page.getByRole("button", { name: "Jeg har gått gjennom den oppdaterte prislisten" })).toBeVisible();
+  await page.getByRole("button", { name: "Lukk og se oppdaterte priser" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.locator("#pakker")).toBeInViewport();
+  await page.getByTestId("open-form").click();
+  await expect(page.getByLabel("Arrangementets navn eller type")).toHaveValue("Foreldet test");
+  await page.getByLabel("Pakke", { exact: true }).selectOption("pkg_lite");
   await page.getByRole("button", { name: "Send forespørsel" }).click();
   await expect(page.getByText("Takk! Vi har mottatt forespørselen din.")).toBeVisible();
+
+  // Nytt skjema for neste arrangement: tomt, men kontaktopplysningene beholdes
+  await page.getByRole("button", { name: "Send en ny forespørsel" }).click();
+  await expect(page.getByLabel("Arrangementets navn eller type")).toHaveValue("");
+  await expect(page.getByLabel("Kontaktperson")).toHaveValue("Stale Test");
+  await expect(page.getByLabel("E-post", { exact: true })).toHaveValue("stale@example.com");
 });
 
 test("admin får varsel i nettsiden når en ny forespørsel kommer inn", async ({ page, browser }) => {
@@ -229,8 +242,31 @@ test("skjemaet ligger bak knapp: Esc lukker, teksten beholdes, og flytende knapp
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
   await expect(sticky).toHaveClass(/sticky-cta--on/);
+  // Ved bunnfeltet skjules den, så den ikke dekker bunnteksten
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(sticky).not.toHaveClass(/sticky-cta--on/);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
+  await expect(sticky).toHaveClass(/sticky-cta--on/);
   await sticky.getByRole("button").click();
   await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("skjemaet: markering som slippes over bakgrunnen lukker ikke dialogen", async ({ page }) => {
+  await page.goto(await obosLink());
+  await page.getByTestId("open-form").click();
+  const field = page.getByLabel("Arrangementets navn eller type");
+  await field.fill("Markert tekst");
+  const box = (await field.boundingBox())!;
+  const vp = page.viewportSize()!;
+  // Trykk i feltet og slipp helt ute på bakgrunnen (utenfor panelet)
+  await page.mouse.move(box.x + 10, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(vp.width - 4, vp.height / 2);
+  await page.mouse.up();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  // Et ekte klikk på bakgrunnen lukker den fortsatt
+  await page.mouse.click(vp.width - 4, vp.height / 2);
+  await expect(page.getByRole("dialog")).toBeHidden();
 });
 
 test("admin: store bilder og feilmerkede filer komprimeres til WebP (maks 1600 px) før opplasting", async ({ page }) => {
@@ -313,7 +349,7 @@ test("utskrift: knapper og dialog skjules, priser og vilkår beholdes", async ({
   await page.emulateMedia({ media: "print" });
   await expect(page.getByTestId("open-form")).toBeHidden();
   await expect(page.locator(".sticky-cta")).toBeHidden();
-  await expect(page.getByRole("button", { name: /Forespør – Medium event/ })).toBeHidden();
+  await expect(page.getByRole("button", { name: /Forespør denne pakken – Medium event/ })).toBeHidden();
   await expect(page.getByText(/^10\s000\skr$/)).toBeVisible();
   await expect(page.getByText("Betalingsfrist: 30 dager.")).toBeVisible();
   // Bunnteksten skal være lesbar (ikke hvit på hvit), og prislisten får plass på én A4-side

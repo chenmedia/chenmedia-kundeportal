@@ -48,7 +48,7 @@ function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number;
       )}
       <div className="pkg-body p-6 md:p-7 flex flex-col flex-1">
         <div className="pkg-head flex items-start justify-between gap-4">
-          <h3 className="display text-xl">{p.name}</h3>
+          <h3 className="display text-xl min-w-0 break-words [overflow-wrap:anywhere]">{p.name}</h3>
           <span className="step-num text-muted" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
         </div>
         <div className="pkg-price mt-6 pt-6 hairline">
@@ -63,7 +63,7 @@ function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number;
           <SelectPackageButton
             packageId={p.id}
             label={p.custom ? "Beskriv behovet ditt" : "Forespør denne pakken"}
-            ariaLabel={`${p.custom ? "Beskriv behovet ditt" : "Forespør"} – ${p.name}`}
+            ariaLabel={`${p.custom ? "Beskriv behovet ditt" : "Forespør denne pakken"} – ${p.name}`}
           />
         </div>
       </div>
@@ -108,10 +108,10 @@ function Gallery({ items, title, mediaUrl }: { items: GalleryItem[]; title: stri
   );
 }
 
-const STEPS = [
+const steps = (contactName: string) => [
   { t: "Velg pakke", d: "Eller beskriv behovet ditt hvis du er usikker." },
   { t: "Send forespørsel", d: "Det tar omtrent to minutter." },
-  { t: "Vi tar kontakt", d: "Kai avklarer tilgjengelighet og detaljer med deg." },
+  { t: "Vi tar kontakt", d: `${contactName} avklarer tilgjengelighet og detaljer med deg.` },
 ];
 
 export function CustomerPage(props: CustomerPageProps) {
@@ -147,7 +147,7 @@ export function CustomerPage(props: CustomerPageProps) {
             <div className="hero-media relative aspect-[16/9] lg:aspect-[4/3] rounded-[28px] overflow-hidden border border-line bg-ink">
               {hero ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={hero} alt={content.heroImageAlt || `Bilde fra et event fotografert av Chen Media for ${customerName}`} className="absolute inset-0 h-full w-full object-cover" />
+                <img src={hero} fetchPriority="high" alt={content.heroImageAlt || `Bilde fra et event fotografert av Chen Media for ${customerName}`} className="absolute inset-0 h-full w-full object-cover" />
               ) : (
                 <div role="img" aria-label="Plassholder for eventbilde" className="absolute inset-0">
                   {/* Krusedullen: stor og beskåret i hjørnet, 100 % hvit */}
@@ -202,7 +202,7 @@ export function CustomerPage(props: CustomerPageProps) {
                     {content.addons.map((a) => (
                       <tr key={a.id}>
                         <td>
-                          <span className="font-semibold">{a.name}</span>
+                          <span className="font-semibold break-words">{a.name}</span>
                           {a.note && <span className="block text-sm text-muted">{a.note}</span>}
                         </td>
                         <td className="text-right sm:whitespace-nowrap mono-num text-[13px] sm:text-[14px]">{formatAddonPrice(a)}</td>
@@ -257,7 +257,7 @@ export function CustomerPage(props: CustomerPageProps) {
                 </div>
               </div>
               <ol className="grid gap-4">
-                {STEPS.map((s, i) => (
+                {steps(content.contactName || "Chen Media").map((s, i) => (
                   <li key={s.t} className="flex gap-5 items-start rounded-2xl bg-cream/60 border border-line p-5">
                     <span className="step-num mt-1">{String(i + 1).padStart(2, "0")}</span>
                     <div>
@@ -313,6 +313,7 @@ export function CustomerPage(props: CustomerPageProps) {
           disabledReason={props.formDisabledReason}
           emailConfigured={!!props.emailConfigured}
           contactEmail={content.contactEmail}
+          contactName={content.contactName || "Chen Media"}
         />
       </RequestDialog>
     </div>
