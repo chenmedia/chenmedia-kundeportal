@@ -20,7 +20,7 @@
   --font-mono: "Space Mono", ui-monospace, monospace;
 }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
 body {
@@ -32,6 +32,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 body.admin { background: #f7f6ec; }
+
+::selection { background: var(--color-accent); color: #fff; }
+* { scrollbar-color: var(--color-ink) var(--color-cream); }
 
 /* Titler: Helvetica 700, versaler, lett sperring (4 %) */
 .display, h1.display, h2.display {
@@ -64,15 +67,15 @@ body.admin { background: #f7f6ec; }
 .card {
   background: var(--color-paper);
   border: 1px solid var(--color-line);
-  border-radius: 20px;
+  border-radius: 16px;
 }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 48px; padding: 0 24px; border-radius: 999px;
+  min-height: 48px; padding: 0 22px; border-radius: 12px;
   font-family: var(--font-body); font-weight: 700; font-size: 15px;
   border: 2px solid transparent; cursor: pointer; text-decoration: none;
-  transition: background-color .15s, color .15s;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease, transform .15s ease;
 }
 .btn-accent { background: var(--color-accent-strong); color: #fff; }
 .btn-accent:hover { background: var(--color-accent-dark); }
@@ -80,8 +83,10 @@ body.admin { background: #f7f6ec; }
 .btn-dark:hover { background: #2b2b2b; }
 .btn-outline { background: transparent; color: var(--color-ink); border-color: var(--color-ink); }
 .btn-outline:hover { background: var(--color-ink); color: #fff; }
-.btn-sm { min-height: 36px; padding: 0 16px; font-size: 14px; }
+.btn-sm { min-height: 38px; padding: 0 14px; border-radius: 10px; font-size: 14px; }
+.btn:active:not([disabled]):not([aria-disabled="true"]) { transform: translateY(1px); }
 .btn[disabled], .btn[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 
 /* Lenke i løpende tekst: svart tekst med aksent-understrek */
 a.link { color: var(--color-ink); text-decoration: underline; text-decoration-color: var(--color-accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
@@ -91,7 +96,10 @@ label.field-label { display: block; font-weight: 600; font-size: 14px; margin-bo
 .input {
   width: 100%; min-height: 46px; padding: 10px 14px; background: #fff; color: var(--color-ink);
   border: 1.5px solid #8a8760; border-radius: 12px; font: inherit; font-size: 16px;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
+.input:hover:not(:disabled) { border-color: var(--color-ink); }
+.input:focus-visible { border-color: var(--color-ink); box-shadow: 0 0 0 3px rgba(194,90,46,.18); outline: 2px solid transparent; }
 textarea.input { min-height: 120px; resize: vertical; }
 .input[aria-invalid="true"] { border-color: var(--color-err); border-width: 2px; }
 .input:disabled { background: #f0eed8; color: #6b6a5a; }
@@ -115,7 +123,7 @@ table.tbl th, table.tbl td { padding: 12px 6px; border-bottom: 1px solid var(--c
 .skip-link:focus { left: 8px; }
 
 /* Lange norske sammensetninger («EVENTFOTOGRAFERING») skal aldri sprenge bredden */
-.hero-title { font-size: clamp(22px, 6.3vw, 44px); overflow-wrap: anywhere; text-wrap: balance; }
+.hero-title { font-size: clamp(26px, 6.6vw, 42px); overflow-wrap: break-word; text-wrap: balance; }
 @media (min-width: 1024px) { .hero-title { font-size: 42px; } }
 
 /* ---------- Kundeside: struktur og detaljer ---------- */
@@ -128,13 +136,13 @@ table.tbl th, table.tbl td { padding: 12px 6px; border-bottom: 1px solid var(--c
 @media (max-width: 767px) { .fact + .fact { border-left: 0; border-top: 1px solid var(--color-line); } }
 
 .pkg-card { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
-@media (hover: hover) { .pkg-card:hover { transform: translateY(-3px); box-shadow: 0 14px 34px -18px rgba(17,17,17,.35); border-color: var(--color-ink); } }
+@media (hover: hover) { .pkg-card:hover { transform: translateY(-4px); box-shadow: 0 18px 34px -22px rgba(17,17,17,.48); border-color: var(--color-ink); } }
 @media (prefers-reduced-motion: reduce) { .pkg-card { transition: none; } .pkg-card:hover { transform: none; } }
 
 .step-num { font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: .08em; }
 
 /* Flytende knapp */
-.sticky-cta { position: fixed; z-index: 40; left: 0; right: 0; bottom: 16px; display: flex; justify-content: center; padding: 0 16px; pointer-events: none;
+.sticky-cta { position: fixed; z-index: 40; left: 0; right: 0; bottom: max(16px, env(safe-area-inset-bottom)); display: flex; justify-content: center; padding: 0 16px; pointer-events: none;
   opacity: 0; transform: translateY(12px); transition: opacity .2s ease, transform .2s ease; }
 .sticky-cta--on { opacity: 1; transform: none; }
 .sticky-cta > * { pointer-events: auto; }
@@ -150,10 +158,18 @@ dialog.request-dialog::backdrop { background: rgba(17,17,17,.6); backdrop-filter
 @media (min-width: 768px) {
   dialog.request-dialog { display: none; }
   dialog.request-dialog[open] { display: grid; place-items: center; }
-  .request-dialog__panel { width: min(760px, calc(100vw - 48px)); height: auto; max-height: calc(100dvh - 48px); border-radius: 24px; box-shadow: 0 30px 80px -20px rgba(0,0,0,.5); }
+  .request-dialog__panel { width: min(760px, calc(100vw - 48px)); height: auto; max-height: calc(100dvh - 48px); border-radius: 16px; box-shadow: 0 30px 80px -20px rgba(0,0,0,.5); }
   .request-dialog__body { padding: 32px 40px 44px; }
   .request-dialog__bar { padding: 14px 20px 14px 32px; }
 }
+
+/* Administrasjon: tydelig plassering uten å gjøre navigasjonen visuelt tung. */
+.admin-nav-link {
+  display: inline-flex; align-items: center; min-height: 38px; padding: 0 2px;
+  color: var(--color-muted); text-decoration: none; border-bottom: 2px solid transparent;
+}
+.admin-nav-link:hover { color: var(--color-ink); }
+.admin-nav-link[aria-current="page"] { color: var(--color-ink); border-bottom-color: var(--color-accent); }
 
 /* ---------- Utskrift / lagre som PDF ----------
    Utskriften er et eget A4-dokument, ikke en krympet nettside: pakkene blir rader (navn og beskrivelse, hva som

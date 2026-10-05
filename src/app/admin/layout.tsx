@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-[#f7f6ec]">
       <a href="#innhold" className="skip-link">Hopp til innhold</a>
-      <header className="bg-cream border-b border-line">
+      <header className="bg-cream/95 border-b border-line sticky top-0 z-50 backdrop-blur-sm">
         <div className="wrap flex flex-wrap items-center gap-x-8 gap-y-3 py-4">
           <Link href="/admin" aria-label="Chen Media administrasjon, til oversikten"><Logo height={34} /></Link>
           {admin && (

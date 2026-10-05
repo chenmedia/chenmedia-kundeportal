@@ -9,8 +9,9 @@ function LoginForm() {
   const [state, action, pending] = useActionState<ActionState, FormData>(loginAction, {});
   const expired = useSearchParams().get("utlopt");
   return (
-    <div className="max-w-md mx-auto card p-8 mt-8">
+    <div className="max-w-md mx-auto card p-6 sm:p-8 mt-4 sm:mt-8">
       <h1 className="display text-2xl">Logg inn</h1>
+      <p className="mt-3 text-sm text-muted">Administrasjon av kundepriser og forespørsler.</p>
       {expired && !state.error && <p role="status" className="mt-3 text-sm font-semibold">Innloggingen har utløpt. Logg inn igjen.</p>}
       <form action={action} className="mt-6 grid gap-5">
         <div>

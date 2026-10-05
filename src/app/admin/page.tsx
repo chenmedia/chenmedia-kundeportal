@@ -42,9 +42,9 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
       <section aria-labelledby="oversikt" className="card p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 id="oversikt" className="title text-lg">Alle kunder</h2>
-          <form role="search" className="flex gap-2">
+          <form role="search" className="flex w-full gap-2 sm:w-auto">
             <label htmlFor="q" className="sr-only">Søk etter kundenavn</label>
-            <input id="q" name="q" defaultValue={query} className="input !min-h-[40px]" placeholder="Søk på navn" />
+            <input id="q" name="q" defaultValue={query} className="input !min-h-[40px] min-w-0" placeholder="Søk på navn" />
             <button className="btn btn-outline btn-sm" type="submit">Søk</button>
           </form>
         </div>

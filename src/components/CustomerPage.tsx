@@ -36,7 +36,7 @@ function Included({ p }: { p: PackageContent }) {
   );
 }
 
-function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number; mediaUrl: (assetId: string) => string }) {
+function PackageCard({ p, mediaUrl }: { p: PackageContent; mediaUrl: (assetId: string) => string }) {
   const price = formatPackagePrice(p);
   return (
     <li className="card pkg-card overflow-hidden flex flex-col">
@@ -46,10 +46,9 @@ function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number;
           <img src={mediaUrl(p.imageId)} alt={p.imageAlt} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
         </div>
       )}
-      <div className="pkg-body p-6 md:p-7 flex flex-col flex-1">
-        <div className="pkg-head flex items-start justify-between gap-4">
+      <div className="pkg-body p-5 sm:p-6 md:p-7 flex flex-col flex-1">
+        <div className="pkg-head">
           <h3 className="display text-xl">{p.name}</h3>
-          <span className="step-num text-muted" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
         </div>
         <div className="pkg-price mt-6 pt-6 hairline">
           <p className="eyebrow">{price.label}</p>
@@ -98,7 +97,7 @@ function Gallery({ items, title, mediaUrl }: { items: GalleryItem[]; title: stri
       <h2 id="galleri-title" className="section-title">{title}</h2>
       <ul className={`mt-8 grid gap-3 md:gap-4 ${layout.grid}`}>
         {items.map((g, i) => (
-          <li key={g.id} className={`relative min-h-0 overflow-hidden rounded-[20px] border border-line bg-ink ${layout.item(i)}`}>
+          <li key={g.id} className={`relative min-h-0 overflow-hidden rounded-2xl border border-line bg-ink ${layout.item(i)}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={mediaUrl(g.imageId)} alt={g.alt} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
           </li>
@@ -123,17 +122,16 @@ export function CustomerPage(props: CustomerPageProps) {
   return (
     <div>
       <a href="#hovedinnhold" className="skip-link">Hopp til innhold</a>
-      <header className="print-head wrap flex items-center justify-between gap-4 py-6">
+      <header className="print-head wrap flex items-center justify-between gap-4 py-5 md:py-6">
         <Logo height={40} />
         <p className="eyebrow text-right hidden sm:block print:block">Avtale for <span className="text-ink">{customerName}</span></p>
       </header>
 
       <main id="hovedinnhold">
         {/* Introduksjon */}
-        <section id="hero" className="wrap pt-4 pb-10 md:pb-14" aria-labelledby="intro-title">
+        <section id="hero" className="wrap pt-5 pb-8 md:pt-8 md:pb-14" aria-labelledby="intro-title">
           <div className="grid gap-10 lg:gap-14 lg:grid-cols-[1.35fr_1fr] items-center">
             <div className="min-w-0">
-              <p className="eyebrow mb-5">Eventfotografering · {customerName}</p>
               <h1 id="intro-title" className="display hero-title">{title}</h1>
               <p className="ingress text-[17px] md:text-[18px] mt-6 max-w-[34rem]">{content.introText || DEFAULT_INTRO}</p>
               <div className="hero-actions mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
@@ -144,7 +142,7 @@ export function CustomerPage(props: CustomerPageProps) {
               </div>
             </div>
 
-            <div className="hero-media relative aspect-[16/9] lg:aspect-[4/3] rounded-[28px] overflow-hidden border border-line bg-ink">
+            <div className="hero-media relative aspect-[16/9] lg:aspect-[4/3] rounded-2xl overflow-hidden bg-ink">
               {hero ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={hero} alt={content.heroImageAlt || `Bilde fra et event fotografert av Chen Media for ${customerName}`} className="absolute inset-0 h-full w-full object-cover" />
@@ -170,16 +168,13 @@ export function CustomerPage(props: CustomerPageProps) {
         </section>
 
         {/* Pakker */}
-        <section id="pakker" className="packages-section wrap py-10 md:py-14 scroll-mt-6" aria-labelledby="pakker-title">
+        <section id="pakker" className="packages-section wrap py-8 md:py-14 scroll-mt-6" aria-labelledby="pakker-title">
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="eyebrow mb-3">Deres avtalte pakker</p>
-              <h2 id="pakker-title" className="section-title">Velg pakke</h2>
-            </div>
+            <h2 id="pakker-title" className="section-title">Velg pakke</h2>
             <p className="text-muted max-w-sm text-[15px]">Alle priser er oppgitt eks. mva. Ingen forpliktelse før du har fått bekreftelse fra oss.</p>
           </div>
           <ul className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3 items-stretch">
-            {content.packages.map((p, i) => <PackageCard key={p.id} p={p} index={i} mediaUrl={props.mediaUrl} />)}
+            {content.packages.map((p) => <PackageCard key={p.id} p={p} mediaUrl={props.mediaUrl} />)}
           </ul>
         </section>
 
@@ -190,10 +185,9 @@ export function CustomerPage(props: CustomerPageProps) {
 
         {/* Tillegg og praktisk */}
         {(content.addons.length > 0 || content.practical.length > 0) && (
-          <section className="addons-section wrap py-10 md:py-14 grid grid-cols-1 gap-5 md:grid-cols-5" aria-labelledby="tillegg-title">
+          <section className="addons-section wrap py-8 md:py-14 grid grid-cols-1 gap-5 md:grid-cols-5" aria-labelledby="tillegg-title">
             {content.addons.length > 0 && (
               <div className="addons-card card min-w-0 p-5 md:p-8 md:col-span-3">
-                <p className="eyebrow mb-3">Ved behov</p>
                 <h2 id="tillegg-title" className="section-title">Tillegg</h2>
                 <table className="tbl mt-5 text-[15px]">
                   <caption className="sr-only">Tillegg og priser eks. mva.</caption>
@@ -213,8 +207,7 @@ export function CustomerPage(props: CustomerPageProps) {
               </div>
             )}
             {content.practical.length > 0 && (
-              <div className="practical-card min-w-0 p-5 md:p-8 md:col-span-2 rounded-[20px] bg-ink text-white on-dark flex flex-col">
-                <p className="eyebrow eyebrow-dark mb-3">Godt å vite</p>
+              <div className="practical-card min-w-0 p-5 md:p-8 md:col-span-2 rounded-2xl bg-ink text-white on-dark flex flex-col">
                 <h2 className="section-title">Praktisk</h2>
                 <ul className="mt-5 space-y-3 text-[15px]">
                   {content.practical.map((t) => (
@@ -242,11 +235,10 @@ export function CustomerPage(props: CustomerPageProps) {
         )}
 
         {/* Slik går det til + oppfordring */}
-        <section className="wrap py-10 md:py-14 no-print" aria-labelledby="steg-title">
+        <section className="wrap py-8 md:py-14 no-print" aria-labelledby="steg-title">
           <div className="card p-6 md:p-10">
             <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] lg:gap-14 items-center">
               <div>
-                <p className="eyebrow mb-3">Ingen hast?</p>
                 <h2 id="steg-title" className="section-title">Bruk siden som prisliste</h2>
                 <p className="ingress mt-4 text-[16px]">
                   Ikke alle trenger å booke med en gang. Når behovet er der, sender du en forespørsel herfra, så slipper du å lete etter e-poster.
@@ -256,9 +248,9 @@ export function CustomerPage(props: CustomerPageProps) {
                   <PrintButton />
                 </div>
               </div>
-              <ol className="grid gap-4">
+              <ol className="border-y border-line">
                 {STEPS.map((s, i) => (
-                  <li key={s.t} className="flex gap-5 items-start rounded-2xl bg-cream/60 border border-line p-5">
+                  <li key={s.t} className="flex gap-5 items-start py-5 border-b border-line last:border-b-0">
                     <span className="step-num mt-1">{String(i + 1).padStart(2, "0")}</span>
                     <div>
                       <p className="title">{s.t}</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Item { id: string; eventName: string; customerName: string; createdAt: string }
@@ -14,6 +15,7 @@ const BASE_TITLE = "Administrasjon | Chen Media";
  * Erstatter e-postvarsel til en e-postleverandør er på plass.
  */
 export function AdminNav({ initial }: { initial: Snapshot }) {
+  const pathname = usePathname();
   const [snap, setSnap] = useState<Snapshot>(initial);
   const [toasts, setToasts] = useState<Item[]>([]);
   const known = useRef(new Set(initial.latest.map((i) => i.id)));
@@ -47,8 +49,8 @@ export function AdminNav({ initial }: { initial: Snapshot }) {
   return (
     <>
       <nav aria-label="Hovedmeny" className="flex flex-wrap gap-x-6 gap-y-1 text-[15px] font-semibold">
-        <Link className="link" href="/admin">Kunder</Link>
-        <Link className="link" href="/admin/foresporsler">
+        <Link className="admin-nav-link" href="/admin" aria-current={pathname === "/admin" || pathname.startsWith("/admin/kunder") ? "page" : undefined}>Kunder</Link>
+        <Link className="admin-nav-link" href="/admin/foresporsler" aria-current={pathname.startsWith("/admin/foresporsler") ? "page" : undefined}>
           Forespørsler
           {snap.newCount > 0 && (
             <span className="badge badge-fill ml-2" data-testid="new-count">
@@ -56,7 +58,7 @@ export function AdminNav({ initial }: { initial: Snapshot }) {
             </span>
           )}
         </Link>
-        <Link className="link" href="/admin/utboks">E-postutboks</Link>
+        <Link className="admin-nav-link" href="/admin/utboks" aria-current={pathname.startsWith("/admin/utboks") ? "page" : undefined}>E-postutboks</Link>
       </nav>
 
       <div aria-live="polite" className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-[360px] z-[60] grid gap-3">
