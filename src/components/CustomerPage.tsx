@@ -1,5 +1,5 @@
 import type { Content, GalleryItem, PackageContent } from "@/lib/content";
-import { DEFAULT_CTA, DEFAULT_GALLERY_TITLE, DEFAULT_INTRO } from "@/lib/content";
+import { DEFAULT_CTA, DEFAULT_GALLERY_TITLE, DEFAULT_INTRO, mailtoHref } from "@/lib/content";
 import { formatAddonPrice, formatDate, formatPackagePrice } from "@/lib/format";
 import { Logo } from "./Logo";
 import { InquiryForm } from "./InquiryForm";
@@ -231,7 +231,7 @@ export function CustomerPage(props: CustomerPageProps) {
                       <p className="eyebrow eyebrow-dark">Spørsmål om avtalen?</p>
                       <p className="mt-2 text-[15px]">
                         Kontakt {content.contactName || "Chen Media"}:{" "}
-                        <a href={`mailto:${content.contactEmail}`} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
+                        <a href={mailtoHref(content.contactEmail)} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
                       </p>
                     </div>
                   </div>
@@ -282,7 +282,7 @@ export function CustomerPage(props: CustomerPageProps) {
             <h2 className="eyebrow eyebrow-dark">Spørsmål? Kontakt {content.contactName || "Chen Media"}</h2>
             {content.contactEmail && (
               <p className="mt-3">
-                <a href={`mailto:${content.contactEmail}`} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
+                <a href={mailtoHref(content.contactEmail)} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
               </p>
             )}
             <p className="footer-version eyebrow eyebrow-dark mt-6">Avtaleversjon</p>

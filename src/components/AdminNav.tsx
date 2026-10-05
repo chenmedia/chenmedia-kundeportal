@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Item { id: string; eventName: string; customerName: string; createdAt: string }
-interface Snapshot { newCount: number; latest: Item[] }
+interface Snapshot { newCount: number; latest: Item[]; failedEmails?: number }
 
 const POLL_MS = 15_000;
 const BASE_TITLE = "Administrasjon | Chen Media";
@@ -26,7 +26,7 @@ export function AdminNav({ initial }: { initial: Snapshot }) {
       const fresh = d.latest.filter((i) => !known.current.has(i.id));
       fresh.forEach((i) => known.current.add(i.id));
       if (fresh.length) setToasts((t) => [...fresh, ...t].slice(0, 3));
-      setSnap({ newCount: d.newCount, latest: d.latest });
+      setSnap({ newCount: d.newCount, latest: d.latest, failedEmails: d.failedEmails ?? 0 });
     } catch {
       /* nettverksfeil: prøver igjen ved neste runde */
     }
@@ -56,7 +56,14 @@ export function AdminNav({ initial }: { initial: Snapshot }) {
             </span>
           )}
         </Link>
-        <Link className="link" href="/admin/utboks">E-postutboks</Link>
+        <Link className="link" href="/admin/utboks">
+          E-postutboks
+          {(snap.failedEmails ?? 0) > 0 && (
+            <span className="badge ml-2 !border-err !text-err" data-testid="failed-emails">
+              {snap.failedEmails}<span className="sr-only"> feilede e-poster</span>
+            </span>
+          )}
+        </Link>
       </nav>
 
       <div aria-live="polite" className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-[360px] z-[60] grid gap-3">

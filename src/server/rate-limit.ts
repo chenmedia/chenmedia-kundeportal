@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { sha256 } from "./crypto";
 
@@ -10,18 +11,17 @@ export async function allow(rawKey: string, limit: number, windowSec: number): P
   const now = new Date();
   // Rydd bort gamle vinduer av og til, så tabellen ikke vokser uten grense.
   if (Math.random() < 0.02) await purgeStaleRateLimits(now).catch(() => undefined);
-  const row = await db.rateLimit.findUnique({ where: { key } });
-  if (!row || now.getTime() - row.windowStart.getTime() > windowSec * 1000) {
-    await db.rateLimit.upsert({
-      where: { key },
-      create: { key, count: 1, windowStart: now },
-      update: { count: 1, windowStart: now },
-    });
-    return true;
-  }
-  if (row.count >= limit) return false;
-  await db.rateLimit.update({ where: { key }, data: { count: { increment: 1 } } });
-  return true;
+  // Ett atomisk upsert: samtidige forsøk kan ikke alle lese «under grensen» og slippe gjennom.
+  // Tidspunktene sendes som ISO-tekst og tolkes som UTC, slik Prisma lagrer DateTime.
+  const nowTs = Prisma.sql`(${now.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
+  const cutoffTs = Prisma.sql`(${new Date(now.getTime() - windowSec * 1000).toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
+  const rows = await db.$queryRaw<{ count: number }[]>`
+    INSERT INTO "RateLimit" ("key", "count", "windowStart") VALUES (${key}, 1, ${nowTs})
+    ON CONFLICT ("key") DO UPDATE SET
+      "count" = CASE WHEN "RateLimit"."windowStart" < ${cutoffTs} THEN 1 ELSE "RateLimit"."count" + 1 END,
+      "windowStart" = CASE WHEN "RateLimit"."windowStart" < ${cutoffTs} THEN ${nowTs} ELSE "RateLimit"."windowStart" END
+    RETURNING "count"`;
+  return Number(rows[0].count) <= limit;
 }
 
 export async function reset(rawKey: string) {

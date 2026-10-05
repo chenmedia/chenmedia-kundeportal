@@ -1,12 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { EMPTY_CONTACT, type CustomerContact } from "@/lib/customer-contact";
+import { appUrl } from "./app-url";
 import { generateToken, sha256, encryptText, decryptText } from "./crypto";
 import { Content, contentSchema, emptyContent, parseContent, canonical, publishProblems, remapImageIds } from "@/lib/content";
 
 function customerUrl(token: string): string {
-  const base = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  return `${base}/k/${token}`;
+  return `${appUrl()}/k/${token}`;
 }
 
 export async function createCustomer(name: string, contact: CustomerContact = EMPTY_CONTACT) {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatCalendarDate, todayInOslo } from "@/lib/format";
 import { inquiryInputSchema, OTHER_PACKAGE } from "@/lib/inquiry";
 import { SELECT_EVENT } from "./form-events";
+import { mailtoHref } from "@/lib/content";
 
 interface Props {
   token?: string;
@@ -293,7 +294,7 @@ export function InquiryForm(props: Props) {
 
       {serverError && (
         <p role="alert" className="mt-6 rounded-xl border-2 border-err px-4 py-3 font-semibold text-err">
-          Vi fikk ikke sendt forespørselen. Prøv igjen, eller kontakt <a className="underline" href={`mailto:${props.contactEmail || "kai@chenmedia.no"}`}>{props.contactEmail || "kai@chenmedia.no"}</a>.
+          Vi fikk ikke sendt forespørselen. Prøv igjen, eller kontakt <a className="underline" href={mailtoHref(props.contactEmail || "kai@chenmedia.no")}>{props.contactEmail || "kai@chenmedia.no"}</a>.
         </p>
       )}
 
