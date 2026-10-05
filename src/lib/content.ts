@@ -50,6 +50,8 @@ const galleryItemSchema = z.object({
   imageId: z.string().min(1),
   /** Tom = dekorativt bilde (skjules for skjermlesere) */
   alt: optionalText(200),
+  /** Vises under bildet, f.eks. «Summer Party 2026 · 4 timer». */
+  caption: optionalText(120),
 });
 export type GalleryItem = z.infer<typeof galleryItemSchema>;
 
