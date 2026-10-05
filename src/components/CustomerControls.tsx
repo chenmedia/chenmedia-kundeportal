@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ConfirmButton } from "./ConfirmButton";
 import { publishAction, rotateTokenAction, setActiveAction, duplicateAction, type ActionState } from "@/app/admin/actions";
 
 interface Props {
@@ -81,7 +82,7 @@ export function CustomerControls({ customerId, link, active, published, differs,
       <section className="card p-5">
         <h2 className="title text-lg mb-2">Dupliser</h2>
         <p className="text-sm text-muted mb-3">Kopierer innhold og pakker til en ny kunde med ny lenke. Forespørsler og historikk kopieres ikke.</p>
-        <form action={duplicateAction.bind(null, customerId)}><button className="btn btn-outline btn-sm">Dupliser kunde</button></form>
+        <form action={duplicateAction.bind(null, customerId)}><ConfirmButton className="btn btn-outline btn-sm" message="Opprette en kopi av denne kunden? Kopien får samme innhold og må få et nytt navn før den kan publiseres.">Dupliser kunde</ConfirmButton></form>
       </section>
     </aside>
   );

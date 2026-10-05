@@ -374,3 +374,81 @@ test("kontaktperson hos bedriften vises ikke på kundesiden", async ({ page, bro
   await cust.goto(await obosLink());
   await expect(cust.getByText("Skjult Person")).toHaveCount(0);
 });
+
+test("admin: søk, status «Booket» og CSV-eksport av forespørsler", async ({ page, browser }) => {
+  const tag = `Eksport${Date.now().toString(36)}`;
+  const cust = await (await browser.newContext()).newPage();
+  await cust.goto(await obosLink());
+  await cust.getByTestId("open-form").click();
+  await cust.getByLabel("Pakke", { exact: true }).selectOption("other");
+  await cust.getByLabel("Arrangementets navn eller type").fill(tag);
+  await cust.getByLabel("Dato er ikke avklart").check();
+  await cust.getByLabel("Sted er ikke avklart").check();
+  await cust.getByLabel("Beskrivelse av behovet").fill("=HYPERLINK(\"http://eksempel.no\")");
+  await cust.getByLabel("Kontaktperson").fill("Eksport Test");
+  await cust.getByLabel("E-post", { exact: true }).fill("eksport@example.com");
+  await cust.getByRole("button", { name: "Send forespørsel" }).click();
+  await expect(cust.getByText("Takk! Vi har mottatt forespørselen din.")).toBeVisible();
+
+  await adminLogin(page);
+  await page.goto("/admin/foresporsler");
+  await page.getByLabel("Søk").fill(tag.toLowerCase());
+  await page.getByRole("button", { name: "Filtrer" }).click();
+  await expect(page.getByText("Viser 1 av 1 forespørsel.")).toBeVisible();
+  await page.getByRole("link", { name: tag }).click();
+
+  // Svar og ring-knapper, og ny status
+  await expect(page.getByRole("link", { name: "Svar på e-post" })).toHaveAttribute("href", /^mailto:eksport@example\.com\?subject=Re%3A/);
+  await page.getByLabel("Oppfølgingsstatus").selectOption("booked");
+  await page.getByRole("button", { name: "Lagre", exact: true }).click();
+  await expect(page.getByText("Lagret.")).toBeVisible();
+  await page.goto(`/admin/foresporsler?q=${tag}&status=booked`);
+  await expect(page.getByText("Viser 1 av 1 forespørsel.")).toBeVisible();
+
+  // CSV: BOM, semikolon, og formel nøytralisert
+  const res = await page.request.get(`/admin/foresporsler/eksport?q=${tag}`);
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toContain("text/csv");
+  expect(res.headers()["content-disposition"]).toMatch(/attachment; filename="foresporsler-\d{4}-\d{2}-\d{2}\.csv"/);
+  const csv = (await res.body()).toString("utf8");
+  expect(csv.startsWith("﻿Referanse;")).toBe(true);
+  expect(csv).toContain(tag);
+  expect(csv).toContain("Booket");
+  expect(csv).toContain("'=HYPERLINK");
+  expect(csv).not.toMatch(/;=HYPERLINK|;"=HYPERLINK/);
+  // Uten innlogging er eksporten stengt
+  expect((await (await browser.newContext()).request.get("/admin/foresporsler/eksport")).status()).toBe(401);
+});
+
+test("admin: gjenopprett versjon som utkast, og vern mot samtidige endringer", async ({ page, browser }) => {
+  await adminLogin(page);
+  await page.getByRole("link", { name: "Åpne OBOS" }).click();
+  await page.waitForURL(/\/admin\/kunder\/[^/]+$/);
+  const customerUrl = page.url();
+
+  // Gjenopprett versjon 1 som utkast
+  await page.getByRole("link", { name: "Versjonshistorikk" }).click();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: /Gjenopprett versjon 1 som utkast/ }).click();
+  await expect(page.getByText("Utkastet er erstattet med innholdet i versjon 1.")).toBeVisible();
+  await expect(page.getByLabel("Pris (kr, eks. mva.)").first()).toHaveValue("6000");
+
+  // To faner: den som lagrer sist får beskjed i stedet for å overskrive i det stille
+  const other = await (await browser.newContext({ storageState: await page.context().storageState() })).newPage();
+  await other.goto(customerUrl);
+  await other.getByLabel("Tittel (valgfritt)").fill("Fra fane to");
+  await other.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(other.getByText("Utkastet er lagret.").first()).toBeVisible();
+
+  await page.getByLabel("Tittel (valgfritt)").fill("Fra fane én");
+  await page.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(page.getByText(/lagret av noen andre/).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Lagre og overskriv" })).toBeVisible();
+  // Lagre og overskriv går gjennom, og videre lagring fungerer uten ny konflikt
+  await page.getByRole("button", { name: "Lagre og overskriv" }).click();
+  await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
+  await page.getByLabel("Tittel (valgfritt)").fill("Fra fane én, igjen");
+  await page.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
+  await expect(page.getByText(/lagret av noen andre/)).toHaveCount(0);
+});

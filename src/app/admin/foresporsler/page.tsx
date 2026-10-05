@@ -1,20 +1,34 @@
 import Link from "next/link";
-import { inquiryList } from "@/server/queries";
+import { INQUIRY_MAX, INQUIRY_PAGE, inquiryList } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
 import { formatCalendarDate, formatDateTime } from "@/lib/format";
 import { STATUS_LABELS, STATUSES, InquirySnapshot } from "@/lib/inquiry";
 import { StatusBadge } from "@/components/AdminBits";
 
-export default async function Inquiries({ searchParams }: { searchParams: Promise<{ status?: string; kunde?: string; epost?: string }> }) {
+export default async function Inquiries({ searchParams }: { searchParams: Promise<{ status?: string; kunde?: string; epost?: string; q?: string; antall?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
   const status = STATUSES.includes(sp.status ?? "") ? sp.status : undefined;
-  const { customers, list } = await inquiryList({ status, customerId: sp.kunde || undefined, failedEmail: sp.epost === "feilet" });
+  const q = (sp.q ?? "").trim().slice(0, 100);
+  const take = Math.min(Math.max(Number(sp.antall) || INQUIRY_PAGE, INQUIRY_PAGE), INQUIRY_MAX);
+  const filters = { status, customerId: sp.kunde || undefined, failedEmail: sp.epost === "feilet", q: q || undefined };
+  const { customers, list, total } = await inquiryList(filters, take);
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (sp.kunde) params.set("kunde", sp.kunde);
+  if (sp.epost === "feilet") params.set("epost", "feilet");
+  if (q) params.set("q", q);
+  const exportHref = `/admin/foresporsler/eksport${params.size ? `?${params}` : ""}`;
+  const moreHref = `/admin/foresporsler?${new URLSearchParams({ ...Object.fromEntries(params), antall: String(take + INQUIRY_PAGE) })}`;
 
   return (
     <div className="grid gap-6">
       <h1 className="display text-3xl">Forespørsler</h1>
       <form className="card p-5 flex flex-wrap items-end gap-4" role="search" aria-label="Filtrer forespørsler">
+        <div>
+          <label htmlFor="q" className="field-label">Søk</label>
+          <input id="q" name="q" type="search" defaultValue={q} maxLength={100} placeholder="Arrangement, kontakt, e-post, referanse" className="input !w-64" />
+        </div>
         <div>
           <label htmlFor="status" className="field-label">Status</label>
           <select id="status" name="status" defaultValue={status ?? ""} className="input !w-auto">
@@ -36,8 +50,15 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
         <button className="btn btn-dark btn-sm mb-1" type="submit">Filtrer</button>
       </form>
 
+      <p className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm" aria-live="polite">
+        <span className="text-muted">Viser {list.length} av {total} {total === 1 ? "forespørsel" : "forespørsler"}.</span>
+        {total > list.length && take < INQUIRY_MAX && <Link className="link font-semibold" href={moreHref}>Vis flere</Link>}
+        {total > list.length && take >= INQUIRY_MAX && <span className="text-muted">Bruk søk eller filter for å se resten.</span>}
+        {total > 0 && <a className="link font-semibold" href={exportHref} download>Last ned som CSV (alle {total})</a>}
+      </p>
+
       {list.length === 0 ? (
-        <p className="card p-6 text-muted">Ingen forespørsler {status || sp.kunde || sp.epost ? "matcher filteret" : "ennå"}. Nye forespørsler fra kundesidene vises her.</p>
+        <p className="card p-6 text-muted">Ingen forespørsler {status || sp.kunde || sp.epost || q ? "matcher filteret" : "ennå"}. Nye forespørsler fra kundesidene vises her.</p>
       ) : (
         <div className="card p-4 overflow-x-auto">
           <table className="tbl text-[15px]">

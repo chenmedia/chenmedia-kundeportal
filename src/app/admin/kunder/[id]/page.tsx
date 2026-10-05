@@ -9,9 +9,10 @@ import { DraftEditor } from "@/components/DraftEditor";
 import { CustomerControls } from "@/components/CustomerControls";
 import { CompanyContactCard } from "@/components/CompanyContactCard";
 
-export default async function CustomerEditPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerEditPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ gjenopprettet?: string }> }) {
   await requireAdmin();
   const { id } = await params;
+  const restored = Number((await searchParams).gjenopprettet) || null;
   const c = await customerForEditor(id);
   if (!c) notFound();
   const content = c.draft ? parseContent(c.draft.content) : emptyContent();
@@ -32,6 +33,12 @@ export default async function CustomerEditPage({ params }: { params: Promise<{ i
         </p>
       </div>
 
+      {restored && (
+        <p role="status" className="card p-4 font-semibold">
+          Utkastet er erstattet med innholdet i versjon {restored}. Ingenting er publisert, og den aktive versjonen er uendret.
+        </p>
+      )}
+
       <CompanyContactCard customerId={c.id} contact={{ contactName: c.contactName, contactEmail: c.contactEmail, contactPhone: c.contactPhone }} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px] items-start">
@@ -40,6 +47,7 @@ export default async function CustomerEditPage({ params }: { params: Promise<{ i
           initialName={c.name}
           needsRename={c.needsRename}
           initialContent={content}
+          draftUpdatedAt={c.draft?.updatedAt.toISOString() ?? null}
           assets={c.assets.map((a) => ({ id: a.id, name: a.originalName, width: a.width, height: a.height }))}
         />
         <CustomerControls

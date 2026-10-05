@@ -111,6 +111,8 @@ export function DraftEditor(props: {
   initialName: string;
   needsRename: boolean;
   initialContent: Content;
+  /** Tidspunktet utkastet sist ble lagret da siden ble åpnet (ISO). Brukes til å oppdage samtidige endringer. */
+  draftUpdatedAt: string | null;
   assets: Asset[];
 }) {
   const [name, setName] = useState(props.initialName);
@@ -119,6 +121,8 @@ export function DraftEditor(props: {
   const saved = useRef(JSON.stringify([props.initialName, props.initialContent]));
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const expectedAt = useRef<string | null>(props.draftUpdatedAt);
+  const [conflict, setConflict] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [uploadErr, setUploadErr] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -144,12 +148,18 @@ export function DraftEditor(props: {
   const patchPkg = (i: number, p: Partial<PackageContent>) => setC((x) => ({ ...x, packages: x.packages.map((k, n) => (n === i ? { ...k, ...p } : k)) }));
   const patchAddon = (i: number, p: Partial<AddonContent>) => setC((x) => ({ ...x, addons: x.addons.map((k, n) => (n === i ? { ...k, ...p } : k)) }));
 
-  async function save() {
-    setSaving(true); setStatus(null);
+  async function save(overwrite = false) {
+    setSaving(true); setStatus(null); setConflict(false);
     try {
-      const r = await saveDraftAction(props.customerId, name, JSON.stringify(c));
-      if (r.ok) { saved.current = snapshot; setDirty(false); setStatus({ kind: "ok", text: "Utkastet er lagret." }); }
-      else setStatus({ kind: "err", text: r.error ?? "Kunne ikke lagre. Prøv igjen." });
+      const r = await saveDraftAction(props.customerId, name, JSON.stringify(c), overwrite ? null : expectedAt.current);
+      if (r.ok) {
+        saved.current = snapshot; setDirty(false);
+        if (r.updatedAt) expectedAt.current = r.updatedAt;
+        setStatus({ kind: "ok", text: "Utkastet er lagret." });
+      } else {
+        setConflict(!!r.conflict);
+        setStatus({ kind: "err", text: r.error ?? "Kunne ikke lagre. Prøv igjen." });
+      }
     } catch {
       setStatus({ kind: "err", text: "Kunne ikke lagre (mistet forbindelsen?). Endringene dine er fortsatt her. Prøv igjen." });
     } finally { setSaving(false); }
@@ -214,6 +224,12 @@ export function DraftEditor(props: {
           {dirty && !status && <span><span className="status-dot" aria-hidden="true" />Ulagrede endringer</span>}
           {dirty && status?.kind === "ok" && <span><span className="status-dot" aria-hidden="true" />Ulagrede endringer</span>}
         </p>
+        {conflict && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => window.location.reload()}>Last siden på nytt</button>
+            <button type="button" className="btn btn-outline btn-sm !border-err !text-err hover:!bg-err hover:!text-white" disabled={saving} onClick={() => void save(true)}>Lagre og overskriv</button>
+          </div>
+        )}
       </div>
 
       <Section id="s-kunde" title="Kunde og introduksjon">

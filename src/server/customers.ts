@@ -46,21 +46,48 @@ export async function setActive(customerId: string, active: boolean) {
   await db.customer.update({ where: { id: customerId }, data: { active } });
 }
 
-export async function saveDraft(customerId: string, name: string, content: Content) {
+export class DraftConflictError extends Error {
+  constructor() { super("draft_conflict"); this.name = "DraftConflictError"; }
+}
+
+/**
+ * Lagrer utkastet. Med `expectedUpdatedAt` (tidspunktet utkastet hadde da siden ble åpnet) avvises lagringen med
+ * DraftConflictError hvis noen andre har lagret i mellomtiden (annen fane eller administrator), i stedet for å
+ * overskrive uten å si fra. Uten verdien overskrives utkastet. Gir utkastets nye tidspunkt.
+ */
+export async function saveDraft(customerId: string, name: string, content: Content, expectedUpdatedAt?: string | null): Promise<{ updatedAt: Date }> {
   const parsed = contentSchema.parse(content);
   const existing = await db.customer.findUniqueOrThrow({ where: { id: customerId } });
   const clearRename = existing.needsRename && name.trim() !== existing.name;
-  await db.$transaction([
-    db.customer.update({
+  const expected = expectedUpdatedAt ? new Date(expectedUpdatedAt) : null;
+  if (expected && Number.isNaN(expected.getTime())) throw new DraftConflictError();
+  return db.$transaction(async (tx) => {
+    if (expected) {
+      const r = await tx.customerDraft.updateMany({ where: { customerId, updatedAt: expected }, data: { content: JSON.stringify(parsed) } });
+      if (r.count === 0) throw new DraftConflictError();
+    } else {
+      await tx.customerDraft.upsert({
+        where: { customerId },
+        create: { customerId, content: JSON.stringify(parsed) },
+        update: { content: JSON.stringify(parsed) },
+      });
+    }
+    await tx.customer.update({
       where: { id: customerId },
       data: { name: name.trim(), ...(clearRename ? { needsRename: false } : {}) },
-    }),
-    db.customerDraft.upsert({
-      where: { customerId },
-      create: { customerId, content: JSON.stringify(parsed) },
-      update: { content: JSON.stringify(parsed) },
-    }),
-  ]);
+    });
+    const draft = await tx.customerDraft.findUniqueOrThrow({ where: { customerId } });
+    return { updatedAt: draft.updatedAt };
+  });
+}
+
+/** Erstatter utkastet med innholdet i en publisert versjon. Publiserte versjoner påvirkes ikke. */
+export async function restoreVersionAsDraft(customerId: string, versionNumber: number): Promise<boolean> {
+  const v = await db.publishedVersion.findUnique({ where: { customerId_number: { customerId, number: versionNumber } } });
+  if (!v) return false;
+  const customer = await db.customer.findUniqueOrThrow({ where: { id: customerId } });
+  await saveDraft(customerId, customer.name, parseContent(v.content));
+  return true;
 }
 
 export async function duplicateCustomer(sourceId: string) {

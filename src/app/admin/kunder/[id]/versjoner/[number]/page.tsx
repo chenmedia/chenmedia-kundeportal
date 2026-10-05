@@ -4,6 +4,8 @@ import { versionByNumber } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
 import { parseContent } from "@/lib/content";
 import { CustomerPage } from "@/components/CustomerPage";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { restoreVersionAction } from "@/app/admin/actions";
 
 export default async function VersionView({ params }: { params: Promise<{ id: string; number: string }> }) {
   await requireAdmin();
@@ -15,7 +17,10 @@ export default async function VersionView({ params }: { params: Promise<{ id: st
       <div className="sticky top-0 z-50 bg-ink text-white px-5 py-3 flex flex-wrap items-center gap-3 on-dark" role="status">
         <span className="badge">Versjon {v.number}</span>
         <span className="text-sm">Arkivvisning. Skjemaet er deaktivert.</span>
-        <Link href={`/admin/kunder/${id}/versjoner`} className="btn btn-outline btn-sm !text-white !border-white ml-auto hover:!bg-white hover:!text-ink">Til historikk</Link>
+        <form action={restoreVersionAction.bind(null, id, v.number)} className="ml-auto">
+          <ConfirmButton className="btn btn-outline btn-sm !text-white !border-white hover:!bg-white hover:!text-ink" message={`Erstatte utkastet med innholdet i versjon ${v.number}? Endringer i utkastet som ikke er publisert går tapt. Den aktive versjonen påvirkes ikke.`}>Gjenopprett som utkast</ConfirmButton>
+        </form>
+        <Link href={`/admin/kunder/${id}/versjoner`} className="btn btn-outline btn-sm !text-white !border-white hover:!bg-white hover:!text-ink">Til historikk</Link>
       </div>
       <div className="bg-cream">
         <CustomerPage
