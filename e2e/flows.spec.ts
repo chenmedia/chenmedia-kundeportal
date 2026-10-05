@@ -178,6 +178,36 @@ test("admin får varsel i nettsiden når en ny forespørsel kommer inn", async (
   await expect(page.getByRole("heading", { name: "Varsel-test" })).toBeVisible();
 });
 
+test("admin kan slette alle forespørsler fra en e-postadresse", async ({ page, browser }) => {
+  const email = "slettes@example.com";
+  const cust = await (await browser.newContext()).newPage();
+  await cust.goto(await obosLink());
+  await cust.getByTestId("open-form").click();
+  await cust.getByLabel("Pakke", { exact: true }).selectOption("other");
+  await cust.getByLabel("Arrangementets navn eller type").fill("Slettes-test");
+  await cust.getByLabel("Dato er ikke avklart").check();
+  await cust.getByLabel("Sted er ikke avklart").check();
+  await cust.getByLabel("Beskrivelse av behovet").fill("Skal slettes via e-postadressen.");
+  await cust.getByLabel("Kontaktperson").fill("Slettes Test");
+  await cust.getByLabel("E-post", { exact: true }).fill(email);
+  await cust.getByRole("button", { name: "Send forespørsel" }).click();
+  await expect(cust.getByText("Takk! Vi har mottatt forespørselen din.")).toBeVisible();
+
+  await adminLogin(page);
+  await page.goto("/admin/foresporsler");
+  await expect(page.getByRole("link", { name: "Slettes-test" })).toBeVisible();
+  await page.getByText("Slett alt fra en e-postadresse").click();
+  await page.getByLabel("E-postadresse").fill(email.toUpperCase());
+  // Uten bekreftelse slettes ingenting
+  await page.getByRole("button", { name: "Slett alt fra adressen" }).click();
+  await expect(page.getByText("Kryss av for å bekrefte")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Slettes-test" })).toBeVisible();
+  await page.getByLabel("Jeg bekrefter at alt fra denne adressen skal slettes for godt.").check();
+  await page.getByRole("button", { name: "Slett alt fra adressen" }).click();
+  await expect(page.getByText("Slettet 1 forespørsel med tilhørende e-postjobber.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Slettes-test" })).toHaveCount(0);
+});
+
 test("admin laster opp bilde, publiserer, og kunden ser bildet via beskyttet rute", async ({ page, browser }) => {
   const link = await obosLink();
   await adminLogin(page);

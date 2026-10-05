@@ -4,6 +4,8 @@ import { requireAdmin } from "@/server/admin-auth";
 import { formatCalendarDate, formatDateTime } from "@/lib/format";
 import { STATUS_LABELS, STATUSES, InquirySnapshot } from "@/lib/inquiry";
 import { StatusBadge } from "@/components/AdminBits";
+import { DeleteByEmailForm } from "@/components/InquiryAdminForms";
+import { emailBodyRetentionDays, inquiryRetentionMonths } from "@/server/retention";
 
 export default async function Inquiries({ searchParams }: { searchParams: Promise<{ status?: string; kunde?: string; epost?: string }> }) {
   await requireAdmin();
@@ -61,6 +63,22 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
           </table>
         </div>
       )}
+
+      <section className="card p-5 grid gap-3" aria-labelledby="personvern-title">
+        <h2 id="personvern-title" className="title text-lg">Personvern</h2>
+        <p className="text-sm text-muted">
+          {inquiryRetentionMonths()
+            ? `Avsluttede forespørsler slettes automatisk når de ikke er endret på ${inquiryRetentionMonths()} måneder.`
+            : "Ingen automatisk sletting av forespørsler er slått på (INQUIRY_RETENTION_MONTHS er ikke satt)."}{" "}
+          {emailBodyRetentionDays()
+            ? `Innholdet i sendte e-poster tømmes etter ${emailBodyRetentionDays()} dager.`
+            : "Innholdet i sendte e-poster beholdes (EMAIL_BODY_RETENTION_DAYS er ikke satt)."}
+        </p>
+        <details>
+          <summary className="link font-semibold cursor-pointer">Slett alt fra en e-postadresse</summary>
+          <div className="mt-4"><DeleteByEmailForm /></div>
+        </details>
+      </section>
     </div>
   );
 }

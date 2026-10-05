@@ -19,6 +19,8 @@ export interface CustomerPageProps {
   token?: string; // undefined = forhåndsvisning/arkiv (skjema deaktivert)
   formDisabledReason?: string;
   emailConfigured?: boolean;
+  /** Satt når automatisk sletting er slått på. Vises i personvernteksten. */
+  retentionMonths?: number | null;
 }
 
 function Included({ p }: { p: PackageContent }) {
@@ -298,6 +300,7 @@ export function CustomerPage(props: CustomerPageProps) {
               Opplysningene du sender inn i skjemaet brukes til å følge opp fotobehovet ditt hos Chen Media.
               Kontaktadressen vises slik at du kan ta kontakt direkte. Har du spørsmål om hvordan opplysningene behandles,
               kan du skrive til oss.
+              {props.retentionMonths ? ` Opplysningene lagres i inntil ${props.retentionMonths} måneder etter at forespørselen er avsluttet, og du kan be oss slette dem tidligere.` : ""}
             </p>
           </div>
         </div>

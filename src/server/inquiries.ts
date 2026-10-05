@@ -103,6 +103,15 @@ export async function updateInquiryFollowUp(id: string, status: string, internal
   await db.inquiry.update({ where: { id }, data: { status, internalNotes } });
 }
 
+/**
+ * Sletter alle forespørsler fra en kontakt-e-postadresse (innsynskrav/sletting). E-postjobbene følger med (cascade).
+ * Gir antall slettede forespørsler.
+ */
+export async function deleteInquiriesByEmail(email: string): Promise<number> {
+  const r = await db.inquiry.deleteMany({ where: { contactEmail: { equals: email.trim(), mode: "insensitive" } } });
+  return r.count;
+}
+
 /** E-postjobber slettes med cascade. Kundeinnhold og versjoner påvirkes ikke. */
 export async function deleteInquiry(id: string) {
   await db.inquiry.delete({ where: { id } });

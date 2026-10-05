@@ -9,6 +9,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Jobbene trenger bare å lese koden.
+permissions:
+  contents: read
+
 jobs:
   check:
     name: Typekontroll, lint, enhetstester og bygg
@@ -35,6 +39,18 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - name: Skjema og migrasjoner stemmer overens
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/kundepriser_test
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/kundepriser_test
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE kundepriser_shadow'
+          npx prisma validate
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url postgresql://postgres:postgres@localhost:5432/kundepriser_shadow --exit-code
+      - name: Sårbarhetssjekk av avhengigheter (varsler, stopper ikke)
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
       - name: Enhetstester (Postgres)
         run: npm test
       - name: Produksjonsbygg

@@ -31,7 +31,8 @@ export async function dashboardData(search: string) {
     db.customer.findMany({
       where: search ? { name: { contains: search, mode: "insensitive" } } : undefined,
       orderBy: { name: "asc" },
-      include: { currentVersion: true },
+      // Oversikten trenger bare etikett og tidspunkt, ikke hele innholds-JSON-en til hver kunde.
+      include: { currentVersion: { select: { id: true, number: true, label: true, publishedAt: true } } },
     }),
     db.inquiry.findMany({ where: { status: "new" }, orderBy: { createdAt: "desc" }, take: 5, include: { customer: true } }),
     failedEmailCount(),
@@ -50,7 +51,7 @@ export async function inquiryList(filters: { status?: string; customerId?: strin
         ...(filters.failedEmail ? { emailJobs: { some: { status: "failed" } } } : {}),
       },
       orderBy: { createdAt: "desc" },
-      include: { customer: true, emailJobs: true },
+      include: { customer: true, emailJobs: { select: { status: true } } },
       take: 200,
     }),
   ]);

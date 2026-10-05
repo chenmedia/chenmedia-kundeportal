@@ -8,13 +8,13 @@ import { SESSION_COOKIE, login, logout, requireAdmin } from "@/server/admin-auth
 import { clientIp } from "@/server/rate-limit";
 import { parseContactForm } from "@/lib/customer-contact";
 import { assetsBelongToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
-import { deleteInquiry, updateInquiryFollowUp } from "@/server/inquiries";
-import { contentImageIds, contentSchema } from "@/lib/content";
+import { deleteInquiry, deleteInquiriesByEmail, updateInquiryFollowUp } from "@/server/inquiries";
+import { contentImageIds, contentSchema, isEmail } from "@/lib/content";
 import { STATUSES } from "@/lib/inquiry";
 import { processJob } from "@/server/email";
 import { logError } from "@/server/log";
 
-export interface ActionState { ok?: boolean; error?: string; problems?: string[]; fieldErrors?: Record<string, string>; values?: Record<string, string> }
+export interface ActionState { ok?: boolean; message?: string; error?: string; problems?: string[]; fieldErrors?: Record<string, string>; values?: Record<string, string> }
 
 function formValues(fd: FormData, keys: string[]): Record<string, string> {
   return Object.fromEntries(keys.map((k) => [k, String(fd.get(k) ?? "")]));
@@ -158,4 +158,21 @@ export async function updateContactAction(customerId: string, _prev: ActionState
   revalidatePath(`/admin/kunder/${customerId}`);
   revalidatePath("/admin");
   return { ok: true };
+}
+
+export async function deleteByEmailAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const email = String(fd.get("email") ?? "").trim();
+  if (!isEmail(email)) return { error: "Skriv en gyldig e-postadresse.", values: { email } };
+  if (fd.get("confirm") !== "on") return { error: "Kryss av for å bekrefte at alt fra denne adressen skal slettes.", values: { email } };
+  let count: number;
+  try {
+    count = await deleteInquiriesByEmail(email);
+  } catch (e) {
+    logError("inquiry.delete-by-email", e);
+    return { error: "Kunne ikke slette. Prøv igjen.", values: { email } };
+  }
+  revalidatePath("/admin/foresporsler");
+  revalidatePath("/admin");
+  return { ok: true, message: count === 0 ? "Fant ingen forespørsler fra denne adressen." : `Slettet ${count} ${count === 1 ? "forespørsel" : "forespørsler"} med tilhørende e-postjobber.` };
 }
