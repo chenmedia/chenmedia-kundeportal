@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AddonContent, Content, MAX_PACKAGES, PackageContent, addonBasis, addonBasisLabels, newId, DEFAULT_CTA } from "@/lib/content";
+import { AddonContent, Content, DEFAULT_CTA, DEFAULT_GALLERY_TITLE, MAX_GALLERY, MAX_PACKAGES, PackageContent, addonBasis, addonBasisLabels, newId } from "@/lib/content";
 import { saveDraftAction } from "@/app/admin/actions";
 
 interface Asset { id: string; name: string; width: number; height: number }
@@ -29,6 +29,25 @@ function Text({ id, label, value, onChange, max, hint, area }: { id: string; lab
         ? <textarea id={id} className="input" value={value} maxLength={max} onChange={(e) => onChange(e.target.value)} aria-describedby={hint ? `${id}-h` : undefined} />
         : <input id={id} className="input" value={value} maxLength={max} onChange={(e) => onChange(e.target.value)} aria-describedby={hint ? `${id}-h` : undefined} />}
       {hint && <p id={`${id}-h`} className="field-hint">{hint}</p>}
+    </div>
+  );
+}
+
+/** Velger blant kundens opplastede bilder, med miniatyr av valgt bilde. */
+function ImageSelect({ id, label, value, assets, onChange, noneLabel }: { id: string; label: string; value: string | null; assets: Asset[]; onChange: (v: string | null) => void; noneLabel: string }) {
+  return (
+    <div>
+      <label htmlFor={id} className="field-label">{label}</label>
+      <div className="flex items-center gap-3">
+        {value && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`/admin/media/${value}`} alt="" loading="lazy" className="h-12 w-16 shrink-0 rounded-lg border border-line object-cover" />
+        )}
+        <select id={id} className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
+          <option value="">{noneLabel}</option>
+          {assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+      </div>
     </div>
   );
 }
@@ -112,35 +131,47 @@ export function DraftEditor(props: {
     } finally { setSaving(false); }
   }
 
-  async function upload(file: File) {
+  /** Laster opp én fil. Returnerer ID-en ved suksess. */
+  async function uploadOne(file: File): Promise<string | null> {
+    if (file.size > 10 * 1024 * 1024) { setUploadErr(`${file.name}: filen er større enn 10 MB.`); return null; }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setUploadErr(`${file.name}: bare JPEG, PNG og WebP er tillatt.`); return null; }
+    const prep = await (await fetch("/api/admin/media/prepare", { method: "POST" })).json();
+    if (!prep.ok) { setUploadErr(prep.error ?? "Opplastingen feilet."); return null; }
+    // Lokalt: rå PUT til egen rute. Drift: signert opplasting rett til Supabase Storage.
+    let put: Response;
+    if (prep.kind === "local") {
+      put = await fetch(prep.uploadUrl, { method: "PUT", body: file });
+    } else {
+      const fd = new FormData();
+      fd.set("cacheControl", "3600");
+      fd.set("", file);
+      put = await fetch(prep.uploadUrl, { method: "PUT", body: fd });
+    }
+    if (!put.ok) { setUploadErr("Opplastingen feilet. Prøv igjen."); return null; }
+    const done = await (await fetch("/api/admin/media/complete", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerId: props.customerId, key: prep.key, filename: file.name }),
+    })).json();
+    if (!done.ok) { setUploadErr(done.error ?? "Opplastingen feilet."); return null; }
+    return done.id as string;
+  }
+
+  /** Flere filer om gangen. Bildene havner i biblioteket; første bilde blir eventbilde hvis det ikke er satt. */
+  async function upload(files: File[]) {
     setUploading(true); setUploadErr("");
     try {
-      if (file.size > 10 * 1024 * 1024) { setUploadErr("Filen er større enn 10 MB."); return; }
-      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setUploadErr("Bare JPEG, PNG og WebP er tillatt."); return; }
-      const prep = await (await fetch("/api/admin/media/prepare", { method: "POST" })).json();
-      if (!prep.ok) { setUploadErr(prep.error ?? "Opplastingen feilet."); return; }
-      // Lokalt: rå PUT til egen rute. Drift: signert opplasting rett til Supabase Storage.
-      let put: Response;
-      if (prep.kind === "local") {
-        put = await fetch(prep.uploadUrl, { method: "PUT", body: file });
-      } else {
-        const fd = new FormData();
-        fd.set("cacheControl", "3600");
-        fd.set("", file);
-        put = await fetch(prep.uploadUrl, { method: "PUT", body: fd });
+      for (const file of files) {
+        const id = await uploadOne(file);
+        if (!id) continue;
+        setAssets((a) => [{ id, name: file.name, width: 0, height: 0 }, ...a]);
+        setC((x) => (x.heroImageId ? x : { ...x, heroImageId: id }));
       }
-      if (!put.ok) { setUploadErr("Opplastingen feilet. Prøv igjen."); return; }
-      const done = await (await fetch("/api/admin/media/complete", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerId: props.customerId, key: prep.key, filename: file.name }),
-      })).json();
-      if (done.ok) {
-        setAssets((a) => [{ id: done.id, name: file.name, width: 0, height: 0 }, ...a]);
-        patch({ heroImageId: done.id });
-      } else setUploadErr(done.error ?? "Opplastingen feilet.");
     } catch { setUploadErr("Opplastingen feilet. Prøv igjen."); }
     finally { setUploading(false); }
   }
+
+  const patchGallery = (i: number, p: Partial<Content["gallery"][number]>) =>
+    setC((x) => ({ ...x, gallery: x.gallery.map((g, n) => (n === i ? { ...g, ...p } : g)) }));
 
   return (
     <form className="grid gap-6" onSubmit={(e) => { e.preventDefault(); void save(); }}>
@@ -172,28 +203,69 @@ export function DraftEditor(props: {
         </div>
       </Section>
 
-      <Section id="s-bilder" title="Bilder" intro="Ett eventbilde øverst på siden. JPEG, PNG eller WebP, maks 10 MB. Uten bilde vises en pen plassholder.">
+      <Section id="s-bilder" title="Bilder" intro="Last opp bilder til biblioteket og velg hvor de skal brukes: ett eventbilde øverst, et galleri mellom pakker og tillegg, og eventuelt ett bilde per pakke. JPEG, PNG eller WebP, maks 10 MB per bilde. Uten bilder vises en pen plassholder.">
         <div>
           <label htmlFor="upload" className="field-label">Last opp bilde</label>
-          <input id="upload" type="file" accept="image/jpeg,image/png,image/webp" className="input !py-2" disabled={uploading}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }} />
+          <input id="upload" type="file" multiple accept="image/jpeg,image/png,image/webp" className="input !py-2" disabled={uploading}
+            onChange={(e) => { const f = Array.from(e.target.files ?? []); if (f.length) void upload(f); e.target.value = ""; }} />
+          <p className="field-hint">Du kan velge flere bilder samtidig.</p>
           {uploading && <p role="status" className="field-hint">Laster opp …</p>}
           {uploadErr && <p role="alert" className="field-error">{uploadErr}</p>}
         </div>
-        <div>
-          <label htmlFor="hero" className="field-label">Eventbilde på kundesiden</label>
-          <select id="hero" className="input" value={c.heroImageId ?? ""} onChange={(e) => patch({ heroImageId: e.target.value || null })}>
-            <option value="">Ingen (plassholder)</option>
-            {assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </div>
-        {c.heroImageId && (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/admin/media/${c.heroImageId}`} alt="Valgt eventbilde" className="rounded-2xl border border-line max-h-56 w-auto" />
-            <Text id="hero-alt" label="Alternativtekst" value={c.heroImageAlt} max={200} onChange={(v) => patch({ heroImageAlt: v })} hint="Beskriv hva bildet viser, for skjermlesere." />
-          </>
+        {assets.length > 0 && (
+          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5 md:grid-cols-6" aria-label="Bildebibliotek">
+            {assets.map((a) => (
+              <li key={a.id} className="min-w-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/admin/media/${a.id}`} alt="" loading="lazy" className="aspect-[4/3] w-full rounded-lg border border-line object-cover" />
+                <p className="mt-1 truncate text-xs text-muted" title={a.name}>{a.name}</p>
+              </li>
+            ))}
+          </ul>
         )}
+
+        <div className="grid gap-4 border-t border-line pt-5">
+          <h3 className="title">Eventbilde øverst</h3>
+          <div>
+            <label htmlFor="hero" className="field-label">Eventbilde på kundesiden</label>
+            <select id="hero" className="input" value={c.heroImageId ?? ""} onChange={(e) => patch({ heroImageId: e.target.value || null })}>
+              <option value="">Ingen (plassholder)</option>
+              {assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          {c.heroImageId && (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/admin/media/${c.heroImageId}`} alt="Valgt eventbilde" className="rounded-2xl border border-line max-h-56 w-auto" />
+              <Text id="hero-alt" label="Alternativtekst" value={c.heroImageAlt} max={200} onChange={(v) => patch({ heroImageAlt: v })} hint="Beskriv hva bildet viser, for skjermlesere." />
+            </>
+          )}
+        </div>
+
+        <div className="grid gap-4 border-t border-line pt-5">
+          <div>
+            <h3 className="title">Galleri ({c.gallery.length}/{MAX_GALLERY})</h3>
+            <p className="text-sm text-muted mt-1">Vises mellom pakkene og tilleggene. Oppsettet tilpasses antall bilder: ett bilde blir en bred banner, tre og fem gir ett stort bilde med mindre ved siden av, ellers et rutenett.</p>
+          </div>
+          {c.gallery.length > 0 && (
+            <Text id="gal-title" label="Overskrift (valgfritt)" value={c.galleryTitle} max={80} onChange={(v) => patch({ galleryTitle: v })} hint={`Standard: «${DEFAULT_GALLERY_TITLE}».`} />
+          )}
+          {c.gallery.map((g, i) => (
+            <fieldset key={g.id} className="border border-line rounded-2xl p-4 grid gap-3">
+              <legend className="title px-2">Galleribilde {i + 1}</legend>
+              <ImageSelect id={`g${i}-img`} label="Bilde" value={g.imageId} assets={assets} noneLabel="Velg bilde" onChange={(v) => v && patchGallery(i, { imageId: v })} />
+              <Text id={`g${i}-alt`} label="Beskrivelse av bildet" value={g.alt} max={200} onChange={(v) => patchGallery(i, { alt: v })} hint="For skjermlesere. La stå tom hvis bildet bare er pynt." />
+              <RowButtons i={i} len={c.gallery.length} what={`galleribilde ${i + 1}`}
+                onMove={(d) => patch({ gallery: move(c.gallery, i, d) })}
+                onRemove={() => patch({ gallery: c.gallery.filter((_, n) => n !== i) })} />
+            </fieldset>
+          ))}
+          <button type="button" className="btn btn-outline btn-sm self-start" disabled={c.gallery.length >= MAX_GALLERY || assets.length === 0}
+            onClick={() => patch({ gallery: [...c.gallery, { id: newId("gal"), imageId: assets[0].id, alt: "" }] })}>
+            + Legg til galleribilde
+          </button>
+          {assets.length === 0 && <p className="field-hint">Last opp bilder først.</p>}
+        </div>
       </Section>
 
       <Section id="s-pakker" title={`Pakker (${c.packages.length}/${MAX_PACKAGES})`} intro="Priser oppgis i kroner eks. mva. Feltene for tid, bilder, bruksrett og levering fylles bare ut hvis det er avtalt.">
@@ -219,6 +291,10 @@ export function DraftEditor(props: {
             <Text id={`p${i}-note`} label="Forklaring til pris" value={p.priceNote} max={300} onChange={(v) => patchPkg(i, { priceNote: v })} hint="Påkrevd for fra-pris hvis beskrivelse mangler." />
             <Text id={`p${i}-desc`} label="Kort beskrivelse" area value={p.description} max={500} onChange={(v) => patchPkg(i, { description: v })} />
             <div className="grid gap-4 sm:grid-cols-2">
+              <ImageSelect id={`p${i}-photo`} label="Bilde på pakkekortet (valgfritt)" value={p.imageId} assets={assets} noneLabel="Ingen" onChange={(v) => patchPkg(i, { imageId: v })} />
+              {p.imageId && <Text id={`p${i}-photo-alt`} label="Beskrivelse av pakkebildet" value={p.imageAlt} max={200} onChange={(v) => patchPkg(i, { imageAlt: v })} hint="For skjermlesere. La stå tom hvis bildet bare er pynt." />}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <Text id={`p${i}-cov`} label="Dekningstid" value={p.coverage} max={120} onChange={(v) => patchPkg(i, { coverage: v })} hint="F.eks. «Inntil 2 timer fotografering»" />
               <Text id={`p${i}-img`} label="Bildeantall" value={p.images} max={120} onChange={(v) => patchPkg(i, { images: v })} hint="F.eks. «Inntil 20 høyoppløselige ferdig redigerte bilder»" />
               <Text id={`p${i}-use`} label="Bruksrett" value={p.usage} max={120} onChange={(v) => patchPkg(i, { usage: v })} />
@@ -230,7 +306,7 @@ export function DraftEditor(props: {
           </fieldset>
         ))}
         <button type="button" className="btn btn-outline btn-sm self-start" disabled={c.packages.length >= MAX_PACKAGES}
-          onClick={() => patch({ packages: [...c.packages, { id: newId("pkg"), name: "", priceType: "fixed", priceOre: null, priceNote: "", description: "", coverage: "", images: "", usage: "", delivery: "", custom: false }] })}>
+          onClick={() => patch({ packages: [...c.packages, { id: newId("pkg"), name: "", priceType: "fixed", priceOre: null, priceNote: "", description: "", coverage: "", images: "", usage: "", delivery: "", custom: false, imageId: null, imageAlt: "" }] })}>
           + Legg til pakke
         </button>
         {c.packages.length >= MAX_PACKAGES && <p className="field-hint">Maks {MAX_PACKAGES} pakker per kundeside.</p>}

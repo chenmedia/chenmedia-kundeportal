@@ -38,6 +38,8 @@ npm run dev                 # http://localhost:3000
 - **Seed** kan kjøres flere ganger uten duplikater. OBOS-innholdet er de eksakte tallene fra
   spesifikasjonen (Lite 6 000 kr, Medium 10 000 kr, Stort fra 16 000 kr, tillegg og praktisk info).
   To tydelig merkede eksempelforespørsler (`example.com`) legges inn når `SEED_DEMO_INQUIRIES=1`.
+- **Bilder på kundesiden:** ett eventbilde øverst, et galleri (inntil 6 bilder, oppsettet følger antall) mellom pakker og tillegg, og valgfritt ett bilde per pakke. Alt settes i administrasjonen under «Bilder» og «Pakker». Innholdet er JSON, så ingen databasemigrering trengs.
+- **Utskrift / PDF:** kundesiden har en egen A4-stil (`@media print` i `globals.css`): pakker som rader, tillegg og vilkår side om side, uten bilder og knapper. Tips: slå av «Topptekster og bunntekster» i utskriftsdialogen, ellers skriver nettleseren lenken (med token) i bunnen av PDF-en.
 - **Bilder lokalt** lagres på disk i `STORAGE_DIR`. Med `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
   satt brukes Supabase Storage i stedet (samme kode som i drift).
 

@@ -1,5 +1,5 @@
-import type { Content, PackageContent } from "@/lib/content";
-import { DEFAULT_CTA, DEFAULT_INTRO } from "@/lib/content";
+import type { Content, GalleryItem, PackageContent } from "@/lib/content";
+import { DEFAULT_CTA, DEFAULT_GALLERY_TITLE, DEFAULT_INTRO } from "@/lib/content";
 import { formatAddonPrice, formatDate, formatPackagePrice } from "@/lib/format";
 import { Logo } from "./Logo";
 import { InquiryForm } from "./InquiryForm";
@@ -25,7 +25,7 @@ function Included({ p }: { p: PackageContent }) {
   const items = [p.coverage, p.images, p.usage, p.delivery].filter(Boolean);
   if (!items.length) return null;
   return (
-    <ul className="mt-6 space-y-3 text-[15px]">
+    <ul className="pkg-incl mt-6 space-y-3 text-[15px]">
       {items.map((t) => (
         <li key={t} className="flex gap-3">
           <CheckIcon className="mt-[3px] h-[18px] w-[18px] shrink-0" />
@@ -36,30 +36,75 @@ function Included({ p }: { p: PackageContent }) {
   );
 }
 
-function PackageCard({ p, index }: { p: PackageContent; index: number }) {
+function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number; mediaUrl: (assetId: string) => string }) {
   const price = formatPackagePrice(p);
   return (
-    <li className="card pkg-card p-6 md:p-7 flex flex-col">
-      <div className="flex items-start justify-between gap-4">
-        <h3 className="display text-xl">{p.name}</h3>
-        <span className="step-num text-muted" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-      </div>
-      <div className="mt-6 pt-6 hairline">
-        <p className="eyebrow">{price.label}</p>
-        <p className="title text-[40px] leading-none mt-2 whitespace-nowrap">{price.amount}</p>
-        <p className="text-sm text-muted mt-2">eks. mva.</p>
-        {p.priceNote && <p className="text-sm text-muted mt-3">{p.priceNote}</p>}
-      </div>
-      {p.description && <p className="mt-6 text-[15px]">{p.description}</p>}
-      <Included p={p} />
-      <div className="mt-auto pt-8">
-        <SelectPackageButton
-          packageId={p.id}
-          label={p.custom ? "Beskriv behovet ditt" : "Forespør denne pakken"}
-          ariaLabel={`${p.custom ? "Beskriv behovet ditt" : "Forespør"} – ${p.name}`}
-        />
+    <li className="card pkg-card overflow-hidden flex flex-col">
+      {p.imageId && (
+        <div className="pkg-image relative aspect-[3/2] bg-ink">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={mediaUrl(p.imageId)} alt={p.imageAlt} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+        </div>
+      )}
+      <div className="pkg-body p-6 md:p-7 flex flex-col flex-1">
+        <div className="pkg-head flex items-start justify-between gap-4">
+          <h3 className="display text-xl">{p.name}</h3>
+          <span className="step-num text-muted" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+        </div>
+        <div className="pkg-price mt-6 pt-6 hairline">
+          <p className="eyebrow">{price.label}</p>
+          <p className="title text-[40px] leading-none mt-2 whitespace-nowrap">{price.amount}</p>
+          <p className="text-sm text-muted mt-2">eks. mva.</p>
+          {p.priceNote && <p className="text-sm text-muted mt-3">{p.priceNote}</p>}
+        </div>
+        {p.description && <p className="pkg-desc mt-6 text-[15px]">{p.description}</p>}
+        <Included p={p} />
+        <div className="pkg-action mt-auto pt-8">
+          <SelectPackageButton
+            packageId={p.id}
+            label={p.custom ? "Beskriv behovet ditt" : "Forespør denne pakken"}
+            ariaLabel={`${p.custom ? "Beskriv behovet ditt" : "Forespør"} – ${p.name}`}
+          />
+        </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * Galleri med ulik komposisjon etter antall bilder (1 = bred banner, 3 og 5 = ett stort bilde + mindre,
+ * ellers rutenett). På mobil legges alt i én eller to kolonner.
+ */
+const GALLERY_LAYOUTS: Record<number, { grid: string; item: (i: number) => string }> = {
+  1: { grid: "grid-cols-1", item: () => "aspect-[16/10] md:aspect-[21/9]" },
+  2: { grid: "grid-cols-1 md:grid-cols-2", item: () => "aspect-[4/3]" },
+  3: {
+    grid: "grid-cols-2 md:grid-cols-3 md:grid-rows-2 md:h-[30rem]",
+    item: (i) => (i === 0 ? "col-span-2 aspect-[16/9] md:aspect-auto md:row-span-2" : "aspect-[4/3] md:aspect-auto"),
+  },
+  4: { grid: "grid-cols-2 md:grid-cols-4", item: () => "aspect-[4/3] md:aspect-[3/4]" },
+  5: {
+    grid: "grid-cols-2 md:grid-cols-4 md:grid-rows-2 md:h-[30rem]",
+    item: (i) => (i === 0 ? "col-span-2 aspect-[16/9] md:aspect-auto md:row-span-2" : "aspect-[4/3] md:aspect-auto"),
+  },
+  6: { grid: "grid-cols-2 md:grid-cols-3", item: () => "aspect-[4/3]" },
+};
+
+function Gallery({ items, title, mediaUrl }: { items: GalleryItem[]; title: string; mediaUrl: (assetId: string) => string }) {
+  const layout = GALLERY_LAYOUTS[Math.min(items.length, 6)];
+  return (
+    <section id="galleri" className="wrap py-10 md:py-14 gallery-section" aria-labelledby="galleri-title">
+      <p className="eyebrow mb-3">Eksempler</p>
+      <h2 id="galleri-title" className="section-title">{title}</h2>
+      <ul className={`mt-8 grid gap-3 md:gap-4 ${layout.grid}`}>
+        {items.map((g, i) => (
+          <li key={g.id} className={`relative min-h-0 overflow-hidden rounded-[20px] border border-line bg-ink ${layout.item(i)}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={mediaUrl(g.imageId)} alt={g.alt} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -78,9 +123,9 @@ export function CustomerPage(props: CustomerPageProps) {
   return (
     <div>
       <a href="#hovedinnhold" className="skip-link">Hopp til innhold</a>
-      <header className="wrap flex items-center justify-between gap-4 py-6">
+      <header className="print-head wrap flex items-center justify-between gap-4 py-6">
         <Logo height={40} />
-        <p className="eyebrow text-right hidden sm:block">Avtale for <span className="text-ink">{customerName}</span></p>
+        <p className="eyebrow text-right hidden sm:block print:block">Avtale for <span className="text-ink">{customerName}</span></p>
       </header>
 
       <main id="hovedinnhold">
@@ -91,7 +136,7 @@ export function CustomerPage(props: CustomerPageProps) {
               <p className="eyebrow mb-5">Eventfotografering · {customerName}</p>
               <h1 id="intro-title" className="display hero-title">{title}</h1>
               <p className="ingress text-[17px] md:text-[18px] mt-6 max-w-[34rem]">{content.introText || DEFAULT_INTRO}</p>
-              <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
+              <div className="hero-actions mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
                 <OpenFormButton label={cta} testId="open-form" />
                 <a href="#pakker" className="link font-semibold inline-flex items-center gap-1.5 min-h-[44px]">
                   Se pakker og priser <ArrowDown className="h-4 w-4" />
@@ -99,7 +144,7 @@ export function CustomerPage(props: CustomerPageProps) {
               </div>
             </div>
 
-            <div className="relative aspect-[16/9] lg:aspect-[4/3] rounded-[28px] overflow-hidden border border-line bg-ink">
+            <div className="hero-media relative aspect-[16/9] lg:aspect-[4/3] rounded-[28px] overflow-hidden border border-line bg-ink">
               {hero ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={hero} alt={content.heroImageAlt || `Bilde fra et event fotografert av Chen Media for ${customerName}`} className="absolute inset-0 h-full w-full object-cover" />
@@ -125,7 +170,7 @@ export function CustomerPage(props: CustomerPageProps) {
         </section>
 
         {/* Pakker */}
-        <section id="pakker" className="wrap py-10 md:py-14 scroll-mt-6" aria-labelledby="pakker-title">
+        <section id="pakker" className="packages-section wrap py-10 md:py-14 scroll-mt-6" aria-labelledby="pakker-title">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="eyebrow mb-3">Deres avtalte pakker</p>
@@ -134,15 +179,20 @@ export function CustomerPage(props: CustomerPageProps) {
             <p className="text-muted max-w-sm text-[15px]">Alle priser er oppgitt eks. mva. Ingen forpliktelse før du har fått bekreftelse fra oss.</p>
           </div>
           <ul className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3 items-stretch">
-            {content.packages.map((p, i) => <PackageCard key={p.id} p={p} index={i} />)}
+            {content.packages.map((p, i) => <PackageCard key={p.id} p={p} index={i} mediaUrl={props.mediaUrl} />)}
           </ul>
         </section>
 
+        {/* Bilder fra oppdrag */}
+        {content.gallery.length > 0 && (
+          <Gallery items={content.gallery} title={content.galleryTitle || DEFAULT_GALLERY_TITLE} mediaUrl={props.mediaUrl} />
+        )}
+
         {/* Tillegg og praktisk */}
         {(content.addons.length > 0 || content.practical.length > 0) && (
-          <section className="wrap py-10 md:py-14 grid grid-cols-1 gap-5 md:grid-cols-5" aria-labelledby="tillegg-title">
+          <section className="addons-section wrap py-10 md:py-14 grid grid-cols-1 gap-5 md:grid-cols-5" aria-labelledby="tillegg-title">
             {content.addons.length > 0 && (
-              <div className="card min-w-0 p-5 md:p-8 md:col-span-3">
+              <div className="addons-card card min-w-0 p-5 md:p-8 md:col-span-3">
                 <p className="eyebrow mb-3">Ved behov</p>
                 <h2 id="tillegg-title" className="section-title">Tillegg</h2>
                 <table className="tbl mt-5 text-[15px]">
@@ -163,8 +213,8 @@ export function CustomerPage(props: CustomerPageProps) {
               </div>
             )}
             {content.practical.length > 0 && (
-              <div className="min-w-0 p-5 md:p-8 md:col-span-2 rounded-[20px] bg-ink text-white on-dark flex flex-col">
-                <p className="eyebrow !text-white/70 mb-3">Godt å vite</p>
+              <div className="practical-card min-w-0 p-5 md:p-8 md:col-span-2 rounded-[20px] bg-ink text-white on-dark flex flex-col">
+                <p className="eyebrow eyebrow-dark mb-3">Godt å vite</p>
                 <h2 className="section-title">Praktisk</h2>
                 <ul className="mt-5 space-y-3 text-[15px]">
                   {content.practical.map((t) => (
@@ -176,9 +226,9 @@ export function CustomerPage(props: CustomerPageProps) {
                 </ul>
                 <p className="text-sm text-white/75 mt-6">Tillegg avklares i det endelige tilbudet. Skjemaet beregner ingen totalsum.</p>
                 {content.contactEmail && (
-                  <div className="mt-auto pt-8">
+                  <div className="practical-contact mt-auto pt-8">
                     <div className="border-t border-white/20 pt-5">
-                      <p className="eyebrow !text-white/70">Spørsmål om avtalen?</p>
+                      <p className="eyebrow eyebrow-dark">Spørsmål om avtalen?</p>
                       <p className="mt-2 text-[15px]">
                         Kontakt {content.contactName || "Chen Media"}:{" "}
                         <a href={`mailto:${content.contactEmail}`} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
@@ -222,28 +272,28 @@ export function CustomerPage(props: CustomerPageProps) {
         </section>
       </main>
 
-      <footer className="bg-ink text-white on-dark">
-        <div className="wrap py-12 grid gap-10 md:grid-cols-3">
-          <div>
+      <footer className="site-footer bg-ink text-white on-dark">
+        <div className="footer-grid wrap py-12 grid gap-10 md:grid-cols-3">
+          <div className="footer-brand">
             <Logo variant="white" height={38} />
             <p className="mt-4 text-sm text-white/80">Eventfoto og film for bedrifter.</p>
           </div>
           <div>
-            <h2 className="eyebrow !text-white/70">Spørsmål? Kontakt {content.contactName || "Chen Media"}</h2>
+            <h2 className="eyebrow eyebrow-dark">Spørsmål? Kontakt {content.contactName || "Chen Media"}</h2>
             {content.contactEmail && (
               <p className="mt-3">
                 <a href={`mailto:${content.contactEmail}`} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
               </p>
             )}
-            <p className="eyebrow !text-white/70 mt-6">Avtaleversjon</p>
-            <p className="mt-2 text-sm">
+            <p className="footer-version eyebrow eyebrow-dark mt-6">Avtaleversjon</p>
+            <p className="footer-version mt-2 text-sm">
               {content.agreementLabel || "Utkast"}
               {props.publishedAt && <> · publisert {formatDate(props.publishedAt)}</>}
             </p>
             {content.validityText && <p className="mt-1 text-sm text-white/80">{content.validityText}</p>}
           </div>
           <div className="no-print">
-            <h2 className="eyebrow !text-white/70">Personvern</h2>
+            <h2 className="eyebrow eyebrow-dark">Personvern</h2>
             <p className="mt-3 text-sm text-white/85">
               Opplysningene du sender inn i skjemaet brukes til å følge opp fotobehovet ditt hos Chen Media.
               Kontaktadressen vises slik at du kan ta kontakt direkte. Har du spørsmål om hvordan opplysningene behandles,
