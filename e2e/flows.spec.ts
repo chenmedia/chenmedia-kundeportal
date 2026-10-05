@@ -93,6 +93,12 @@ test("admin: utkast er usynlig for kunde til publisering, deretter ny pris på s
   await page.getByRole("link", { name: "Forhåndsvis utkast" }).click();
   await expect(page.getByText("Forhåndsvisning av utkastet")).toBeVisible();
   await expect(page.getByText(/^6\s500\skr$/)).toBeVisible();
+  // Utskrift fra forhåndsvisningen: admin-toppen og banneren skjules, og arket får ikke avkuttede marger
+  await page.emulateMedia({ media: "print" });
+  await expect(page.getByText("Forhåndsvisning av utkastet")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Logg ut" })).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.emulateMedia({ media: "screen" });
   await page.getByRole("link", { name: "Tilbake til redigering" }).click();
 
   page.once("dialog", (d) => d.accept());
@@ -310,6 +316,12 @@ test("admin legger inn galleri og pakkebilde, kunden ser dem, og utskriften skju
 test("utskrift: knapper og dialog skjules, priser og vilkår beholdes", async ({ page }) => {
   await page.goto(await obosLink());
   await expect(page.getByRole("button", { name: /Skriv ut eller lagre som PDF/ })).toBeVisible();
+  // Filnavnet ved «Lagre som PDF» følger sidetittelen, som byttes bare mens utskriften pågår
+  const screenTitle = await page.title();
+  await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+  expect(await page.title()).toMatch(/^Chen Media - Prisliste OBOS/);
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  expect(await page.title()).toBe(screenTitle);
   await page.emulateMedia({ media: "print" });
   await expect(page.getByTestId("open-form")).toBeHidden();
   await expect(page.locator(".sticky-cta")).toBeHidden();

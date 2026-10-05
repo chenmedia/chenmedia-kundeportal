@@ -172,6 +172,11 @@ dialog.request-dialog::backdrop { background: rgba(17,17,17,.6); backdrop-filter
   .no-print, .btn, .sticky-cta, dialog, .skip-link, nav, [data-testid="open-form"],
   .hero-actions, .pkg-image, .pkg-action, .step-num, .gallery-section, .practical-contact { display: none !important; }
 
+  /* Admin-forhåndsvisning og arkiv: skallet (topp, banner, negative marger, full skjermhøyde) skal ikke påvirke arket */
+  .admin-root { min-height: 0 !important; background: none !important; }
+  .admin-main, .preview-shell { margin: 0 !important; padding: 0 !important; max-width: none !important; }
+  .preview-shell > .bg-cream { background: none !important; }
+
   .wrap { max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
   section { padding-top: 4.5mm !important; padding-bottom: 0 !important; }
   h1, h2, h3 { break-after: avoid; }
@@ -199,6 +204,9 @@ dialog.request-dialog::backdrop { background: rgba(17,17,17,.6); backdrop-filter
   .packages-section > div:first-child { display: flex !important; break-after: avoid; }
   .packages-section > div:first-child > p { max-width: 70mm !important; font-size: 8pt !important; }
   #pakker > ul { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 4mm !important; margin-top: 4mm !important; }
+  /* Ett og to kort fyller bredden, fire blir 2 × 2 (ikke 3 + 1) */
+  #pakker > ul:has(> li:only-child) { grid-template-columns: 1fr !important; }
+  #pakker > ul:has(> li:nth-child(2):last-child), #pakker > ul:has(> li:nth-child(4):last-child) { grid-template-columns: repeat(2, 1fr) !important; }
   .pkg-card { display: block !important; overflow: visible !important; break-inside: avoid; transform: none !important; }
   .pkg-body { display: block !important; padding: 4.5mm !important; }
   .pkg-head h3 { font-size: 12pt !important; }

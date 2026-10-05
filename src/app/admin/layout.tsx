@@ -12,9 +12,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const admin = await currentAdmin();
   const initial = admin ? await newInquirySnapshot() : { newCount: 0, latest: [] };
   return (
-    <div className="min-h-screen bg-[#f7f6ec]">
+    <div className="admin-root min-h-screen bg-[#f7f6ec]">
       <a href="#innhold" className="skip-link">Hopp til innhold</a>
-      <header className="bg-cream border-b border-line">
+      <header className="no-print bg-cream border-b border-line">
         <div className="wrap flex flex-wrap items-center gap-x-8 gap-y-3 py-4">
           <Link href="/admin" aria-label="Chen Media administrasjon, til oversikten"><Logo height={34} /></Link>
           {admin && (
@@ -28,7 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           )}
         </div>
       </header>
-      <main id="innhold" className="wrap py-8 md:py-10">{children}</main>
+      <main id="innhold" className="admin-main wrap py-8 md:py-10">{children}</main>
     </div>
   );
 }

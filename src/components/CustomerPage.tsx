@@ -7,6 +7,7 @@ import { OpenFormButton, SelectPackageButton } from "./SelectPackageButton";
 import { RequestDialog } from "./RequestDialog";
 import { StickyCta } from "./StickyCta";
 import { PrintButton } from "./PrintButton";
+import { PrintTitle } from "./PrintTitle";
 import { ArrowDown, CheckIcon } from "./Icons";
 
 export interface CustomerPageProps {
@@ -114,6 +115,11 @@ const STEPS = [
   { t: "Vi tar kontakt", d: "Kai avklarer tilgjengelighet og detaljer med deg." },
 ];
 
+/** Filnavn ved «Lagre som PDF», f.eks. «Chen Media - Prisliste OBOS - Prisliste V2026». */
+export function pdfTitle(customerName: string, agreementLabel: string) {
+  return ["Chen Media", `Prisliste ${customerName}`, agreementLabel].filter(Boolean).join(" - ");
+}
+
 export function CustomerPage(props: CustomerPageProps) {
   const { content, customerName } = props;
   const title = content.introTitle || `Eventfotografering for ${customerName}`;
@@ -122,6 +128,7 @@ export function CustomerPage(props: CustomerPageProps) {
 
   return (
     <div>
+      <PrintTitle title={pdfTitle(customerName, content.agreementLabel)} />
       <a href="#hovedinnhold" className="skip-link">Hopp til innhold</a>
       <header className="print-head wrap flex items-center justify-between gap-4 py-6">
         <Logo height={40} />
