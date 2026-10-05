@@ -278,6 +278,8 @@ test("admin legger inn galleri og pakkebilde, kunden ser dem, og utskriften skju
   await page.getByRole("button", { name: "+ Legg til galleribilde" }).click();
   await page.getByLabel("Beskrivelse av bildet").first().fill("Foredrag på scenen");
   await page.getByLabel("Beskrivelse av bildet").nth(1).fill("Mingling etter programmet");
+  await page.getByLabel("Bildetekst (vises i galleriet)").first().fill("Summer Party 2026 · 4 timer");
+  await page.getByLabel("Bildetekst (vises i galleriet)").nth(1).fill("Mingling etter programmet");
   await page.getByLabel("Overskrift (valgfritt)").fill("Fra tidligere arrangementer");
   await page.getByLabel("Bilde på pakkekortet (valgfritt)").first().selectOption({ label: "galleri-1.png" });
   await page.getByLabel("Beskrivelse av pakkebildet").fill("Fotograf i arbeid");
@@ -294,6 +296,23 @@ test("admin legger inn galleri og pakkebilde, kunden ser dem, og utskriften skju
   const gallery = cust.locator("#galleri");
   await expect(gallery.getByRole("img", { name: "Foredrag på scenen" })).toBeVisible();
   await expect(gallery.getByRole("img", { name: "Mingling etter programmet" })).toBeVisible();
+  // Bildetekster vises i galleriet, og klikk åpner bildet stort med piltaster og Esc
+  await expect(gallery.locator(".gallery-caption", { hasText: "Summer Party 2026 · 4 timer" })).toBeVisible();
+  const lightbox = cust.getByRole("dialog", { name: "Bildevisning" });
+  await expect(lightbox).toBeHidden();
+  await gallery.getByRole("button", { name: /Forstørr bilde 1 av 2/ }).click();
+  await expect(lightbox).toBeVisible();
+  await expect(lightbox.getByRole("img", { name: "Foredrag på scenen" })).toBeVisible();
+  await expect(lightbox.getByText("Summer Party 2026 · 4 timer")).toBeVisible();
+  await expect(lightbox.getByRole("status")).toHaveText("1 / 2");
+  await cust.keyboard.press("ArrowRight");
+  await expect(lightbox.getByText("Mingling etter programmet")).toBeVisible();
+  await expect(lightbox.getByRole("status")).toHaveText("2 / 2");
+  await cust.keyboard.press("ArrowRight"); // går rundt
+  await expect(lightbox.getByRole("status")).toHaveText("1 / 2");
+  await cust.keyboard.press("Escape");
+  await expect(lightbox).toBeHidden();
+  await expect(gallery.getByRole("button", { name: /Forstørr bilde 1 av 2/ })).toBeFocused();
   const pkgImg = cust.getByRole("img", { name: "Fotograf i arbeid" });
   await expect(pkgImg).toBeVisible();
   // Bildene serveres via den beskyttede kunderuten og faktisk lastes

@@ -23,6 +23,12 @@ describe("flere bilder i innholdet", () => {
     expect(contentImageIds(old)).toEqual([]);
   });
 
+  it("galleribilder uten bildetekst (lagret før bildetekster fantes) får tom tekst", () => {
+    const c = contentSchema.parse({ gallery: [{ id: "g1", imageId: "img1", alt: "x" }] });
+    expect(c.gallery[0].caption).toBe("");
+    expect(() => contentSchema.parse({ gallery: [{ id: "g1", imageId: "i", caption: "x".repeat(121) }] })).toThrow();
+  });
+
   it("galleriet har en øvre grense", () => {
     const item = (n: number) => ({ id: `g${n}`, imageId: `img${n}` });
     expect(() => contentSchema.parse({ gallery: Array.from({ length: MAX_GALLERY }, (_, n) => item(n)) })).not.toThrow();
@@ -71,7 +77,7 @@ describe("flere bilder i innholdet", () => {
     const other = await upload(b.customer.id, "annen.png");
 
     const draft = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: a.customer.id } })).content);
-    draft.gallery = [{ id: "g1", imageId: gal, alt: "Fra en konferanse" }];
+    draft.gallery = [{ id: "g1", imageId: gal, alt: "Fra en konferanse", caption: "" }];
     draft.packages[0].imageId = pkg;
     await saveDraft(a.customer.id, "Galleri A", draft);
 
@@ -94,7 +100,7 @@ describe("flere bilder i innholdet", () => {
     const pkg = await upload(src.customer.id, "pkg.png");
     const draft = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: src.customer.id } })).content);
     draft.heroImageId = hero;
-    draft.gallery = [{ id: "g1", imageId: gal, alt: "" }];
+    draft.gallery = [{ id: "g1", imageId: gal, alt: "", caption: "" }];
     draft.packages[1].imageId = pkg;
     await saveDraft(src.customer.id, "Kopi-kilde", draft);
 
