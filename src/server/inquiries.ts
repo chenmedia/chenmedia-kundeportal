@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
-import { randomReference } from "./crypto";
+import { randomReference, sha256 } from "./crypto";
+import { allow } from "./rate-limit";
 import { resolvePublished } from "./customers";
 import { buildEmails, notifyAddress, processInquiryJobs } from "./email";
 import { InquiryInput, InquirySnapshot, OTHER_PACKAGE } from "@/lib/inquiry";
@@ -45,7 +46,12 @@ export async function submitInquiry(args: {
     package: pkg,
     addons: pub.content.addons,
     practical: pub.content.practical,
+    contactName: pub.content.contactName,
   };
+
+  // Kvitteringen går til adressen kunden oppgir. Uten tak kan skjemaet misbrukes til å sende tekst fra
+  // Chen Medias domene til vilkårlige adresser, så hver mottaker får maks tre kvitteringer i døgnet.
+  const sendReceipt = await allow(`receipt:${sha256(i.contactEmail.toLowerCase())}`, 3, 24 * 3600);
 
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
@@ -71,7 +77,8 @@ export async function submitInquiry(args: {
         printUse: i.printUse,
         idempotencyKey: args.idempotencyKey,
       };
-      const emails = buildEmails(base, snapshot, notifyAddress(pub.content.contactEmail));
+      const emails = buildEmails(base, snapshot, notifyAddress(pub.content.contactEmail))
+        .filter((e) => sendReceipt || e.type !== "customer_receipt");
       const inquiry = await db.inquiry.create({
         data: { ...base, emailJobs: { create: emails.map((e) => ({ ...e, replyTo: e.replyTo ?? null })) } },
       });

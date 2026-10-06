@@ -93,7 +93,7 @@ model Inquiry {
   contactPhone   String?
   express        Boolean          @default(false)
   printUse       Boolean          @default(false)
-  status         String           @default("new") // new | following_up | clarified | closed
+  status         String           @default("new") // new | following_up | clarified | booked | lost | closed
   internalNotes  String           @default("")
   idempotencyKey String           @unique
   createdAt      DateTime         @default(now())

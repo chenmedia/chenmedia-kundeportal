@@ -11,6 +11,7 @@ export function StatusBadge({ status }: { status: string }) {
 
 export const EMAIL_STATUS: Record<string, string> = {
   pending: "Venter",
+  sending: "Sender",
   sent: "Sendt",
   failed: "Feilet",
   local_preview: "Lokal forhåndsvisning – ikke sendt",

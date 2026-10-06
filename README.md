@@ -39,9 +39,15 @@ npm run dev                 # http://localhost:3000
   spesifikasjonen (Lite 6 000 kr, Medium 10 000 kr, Stort fra 16 000 kr, tillegg og praktisk info).
   To tydelig merkede eksempelforespørsler (`example.com`) legges inn når `SEED_DEMO_INQUIRIES=1`.
 - **Bilder på kundesiden:** ett eventbilde øverst, et galleri (inntil 6 bilder, oppsettet følger antall) mellom pakker og tillegg, og valgfritt ett bilde per pakke. Alt settes i administrasjonen under «Bilder» og «Pakker». Innholdet er JSON, så ingen databasemigrering trengs.
-- **Utskrift / PDF:** kundesiden har en egen A4-stil (`@media print` i `globals.css`): pakker som rader, tillegg og vilkår side om side, uten bilder og knapper. Tips: slå av «Topptekster og bunntekster» i utskriftsdialogen, ellers skriver nettleseren lenken (med token) i bunnen av PDF-en.
+- **Utskrift / PDF:** kundesiden har en egen A4-stil (`@media print` i `globals.css`) som følger nettsiden: kremfarget side, hvite avrundede kort, pakkene side om side, svart «Praktisk»-flate og svart bunnfelt. Knapper, dialog, galleri og pakkebilder skjules (heltebildet beholdes), og standardinnholdet holder seg til én side. Bakgrunnsfarger skrives ut selv om «Bakgrunnsgrafikk» er av. Utskrift fra admin-forhåndsvisning og arkiv skjuler admin-skallet. Filnavnet blir «Chen Media - Prisliste <kunde> - <avtale>.pdf» (sidetittelen byttes bare mens utskriftsdialogen er åpen). Tips: slå av «Topptekster og bunntekster» i utskriftsdialogen, ellers skriver nettleseren lenken (med token) i bunnen av PDF-en.
 - **Bilder lokalt** lagres på disk i `STORAGE_DIR`. Med `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
   satt brukes Supabase Storage i stedet (samme kode som i drift).
+
+## Administrasjon (utvalg)
+
+- **Forespørsler:** søk (arrangement, kontaktperson, e-post, referanse, kunde), filter på status/kunde/feilet e-post, «Vis flere» (100 om gangen) og CSV-eksport av alle treff (`/admin/foresporsler/eksport`, semikolon + UTF-8 for norsk Excel, celler som starter med `= + - @` får apostrof mot formelinjeksjon). Statuser: Ny, Under oppfølging, Avklart, Booket, Tapt, Avsluttet.
+- **Utkast:** lagring avvises hvis noen andre har lagret i mellomtiden (annen fane eller administrator). Du kan da laste siden på nytt eller velge «Lagre og overskriv».
+- **Versjoner:** «Gjenopprett som utkast» kopierer en gammel versjon inn i utkastet. Publiserte versjoner endres aldri.
 
 ## Miljøvariabler
 
@@ -50,7 +56,8 @@ npm run dev                 # http://localhost:3000
 | `DATABASE_URL` | Postgres. I drift: Supabase **pooler**-adressen (port 6543) med `?pgbouncer=true&connection_limit=1`. |
 | `DIRECT_URL` | Direkte Postgres-adresse (port 5432). Brukes til migrasjoner. |
 | `APP_SECRET` | Krypterer kundelenker som lagres for «Kopier lenke». **Påkrevd i produksjon** (min. 16 tegn). Byttes den, kan gamle lenker ikke vises (generer ny lenke). |
-| `APP_URL` | Offentlig adresse, brukes til å bygge kundelenker. |
+| `APP_URL` | Offentlig adresse, brukes til å bygge kundelenker. Mangler den på Vercel i produksjon, brukes prosjektets produksjonsadresse (`VERCEL_PROJECT_PRODUCTION_URL`). |
+| `CRON_SECRET` | Minst 16 tegn. Vercel sender den som `Authorization: Bearer …` til `/api/cron/*`. Uten den avvises alle cron-kall, og feilede e-poster prøves ikke på nytt automatisk. Marker som *Sensitive*. |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Bildelagring i Supabase Storage (privat bucket, standard `kundeportal-media`). Service-nøkkelen brukes bare på serveren og må aldri eksponeres i nettleseren. |
 | `SUPABASE_PUBLISHABLE_KEY` (eller `SUPABASE_ANON_KEY`) | Offentlig nøkkel som trengs for administratorinnlogging via Supabase Auth. Mangler den, faller innloggingen tilbake til lokal passord-hash. |
 | `INQUIRY_RETENTION_MONTHS`, `EMAIL_BODY_RETENTION_DAYS` | Oppbevaringsfrister, se «Personvern og oppbevaring». Tomt = ingen automatisk sletting. |
@@ -114,8 +121,12 @@ filer. Kunder får bildet via en tilgangskontrollert rute som videresender til e
   mens administrasjonen er åpen i en nettleser. Nye forespørsler vises også øverst på kundeoversikten.
 - **E-post:** utskiftbar leverandøradapter (`src/server/email.ts`, Resend støttes). Uten leverandør
   havner e-postene i **E-postutboksen** (`/admin/utboks`, kun innlogget), merket
-  «Lokal forhåndsvisning – ikke sendt». Feilede utsendinger kan prøves på nytt fra forespørselen.
-  Kundens adresse er *Reply-To*, aldri avsender.
+  «Lokal forhåndsvisning – ikke sendt». Feilede utsendinger kan prøves på nytt fra forespørselen, og en
+  daglig cron (`/api/cron/email-retry`, se `vercel.json`) prøver feilede jobber på nytt (opptil fem forsøk
+  i tre døgn). Hver utsending har tidsavbrudd (8 s) og idempotensnøkkel mot Resend, og en jobb tas atomisk
+  slik at samme e-post ikke sendes to ganger. Antall feilede e-poster vises som rødt merke i menyen.
+  Kundens adresse er *Reply-To*, aldri avsender. Kvittering til kunden sendes maks tre ganger i døgnet per
+  adresse (teamet varsles uansett), slik at skjemaet ikke kan brukes til å sende tekst til vilkårlige adresser.
 - **Tilgang:** tokens er 32 tilfeldige byte, lagres som SHA-256-hash (pluss kryptert kopi til
   «Kopier lenke»). Ugyldig, deaktivert og upublisert lenke gir samme nøytrale 404-side. Bilder serveres
   bare via tilgangskontrollerte ruter, og en kundelenke får bare bilder fra egen publiserte versjon.
@@ -158,7 +169,7 @@ du selv har lagt inn på en kunde (`Customer.contact*`) slettes ikke automatisk,
 - Testene nullstiller databasene `*_test` og `*_e2e` og nekter å røre andre databaser.
 - Rate limiting bruker `x-forwarded-for`, som bare er pålitelig bak en proxy du kontrollerer.
 - E-post er bare testet mot mockede svar. **Ekte levering via Resend er ikke verifisert.**
-- Ingen automatisk gjenoppretting av gamle versjoner (kopier manuelt inn i utkastet).
+- Gjenoppretting av en gammel versjon legger den inn som utkast («Gjenopprett som utkast» i versjonshistorikken), den setter ikke versjonen aktiv. Det finnes ingen revisjonslogg over hvem som publiserte eller endret hva.
 - Logoen er raster (PNG) hentet fra brandguiden. Helvetica faller tilbake til Arial/Liberation Sans
   på maskiner uten Helvetica.
 

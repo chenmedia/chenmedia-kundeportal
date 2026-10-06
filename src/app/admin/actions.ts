@@ -7,14 +7,14 @@ import { z } from "zod";
 import { SESSION_COOKIE, login, logout, requireAdmin } from "@/server/admin-auth";
 import { clientIp } from "@/server/rate-limit";
 import { parseContactForm } from "@/lib/customer-contact";
-import { assetsBelongToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
+import { DraftConflictError, assetsBelongToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, restoreVersionAsDraft, rotateToken, saveDraft, setActive } from "@/server/customers";
 import { deleteInquiry, deleteInquiriesByEmail, updateInquiryFollowUp } from "@/server/inquiries";
 import { contentImageIds, contentSchema, isEmail } from "@/lib/content";
 import { STATUSES } from "@/lib/inquiry";
 import { processJob } from "@/server/email";
 import { logError } from "@/server/log";
 
-export interface ActionState { ok?: boolean; message?: string; error?: string; problems?: string[]; fieldErrors?: Record<string, string>; values?: Record<string, string> }
+export interface ActionState { ok?: boolean; message?: string; updatedAt?: string; conflict?: boolean; error?: string; problems?: string[]; fieldErrors?: Record<string, string>; values?: Record<string, string> }
 
 function formValues(fd: FormData, keys: string[]): Record<string, string> {
   return Object.fromEntries(keys.map((k) => [k, String(fd.get(k) ?? "")]));
@@ -62,7 +62,7 @@ export async function createCustomerAction(_prev: ActionState, fd: FormData): Pr
   redirect(`/admin/kunder/${id}`);
 }
 
-export async function saveDraftAction(customerId: string, name: string, contentJson: string): Promise<ActionState> {
+export async function saveDraftAction(customerId: string, name: string, contentJson: string, expectedUpdatedAt?: string | null): Promise<ActionState> {
   await requireAdmin();
   const nm = name.trim();
   if (nm.length < 1) return { error: "Kundenavn kan ikke være tomt." };
@@ -74,9 +74,18 @@ export async function saveDraftAction(customerId: string, name: string, contentJ
   }
   // Bilder må tilhøre denne kunden.
   if (!(await assetsBelongToCustomer(contentImageIds(parsed), customerId))) return { error: "Et av bildene tilhører ikke denne kunden." };
-  await saveDraft(customerId, nm, parsed);
+  let saved: { updatedAt: Date };
+  try {
+    saved = await saveDraft(customerId, nm, parsed, expectedUpdatedAt);
+  } catch (e) {
+    if (e instanceof DraftConflictError) {
+      return { conflict: true, error: "Utkastet er lagret av noen andre (eller i en annen fane) siden du åpnet siden. Last siden på nytt for å se endringene, eller lagre og overskriv dem." };
+    }
+    logError("customer.save-draft", e, { customerId });
+    return { error: "Kunne ikke lagre utkastet. Endringene dine er fortsatt her. Prøv igjen." };
+  }
   revalidatePath(`/admin/kunder/${customerId}`);
-  return { ok: true };
+  return { ok: true, updatedAt: saved.updatedAt.toISOString() };
 }
 
 export async function publishAction(customerId: string): Promise<ActionState> {
@@ -107,16 +116,28 @@ export async function rotateTokenAction(customerId: string): Promise<ActionState
 
 export async function setActiveAction(customerId: string, active: boolean): Promise<ActionState> {
   await requireAdmin();
-  await setActive(customerId, active);
+  try {
+    await setActive(customerId, active);
+  } catch (e) {
+    logError("customer.set-active", e, { customerId });
+    return { error: "Kunne ikke endre tilgangen. Prøv igjen." };
+  }
   revalidatePath(`/admin/kunder/${customerId}`);
   revalidatePath("/admin");
   return { ok: true };
 }
 
-export async function duplicateAction(customerId: string) {
+export async function duplicateAction(customerId: string): Promise<void> {
   await requireAdmin();
-  const c = await duplicateCustomer(customerId);
-  redirect(`/admin/kunder/${c.id}`);
+  let id: string;
+  try {
+    id = (await duplicateCustomer(customerId)).id;
+  } catch (e) {
+    logError("customer.duplicate", e, { customerId });
+    // Brukes som skjemahandling uten plass til feilmelding: feilsiden (error.tsx) viser «Prøv igjen».
+    throw new Error("Kunne ikke duplisere kunden.");
+  }
+  redirect(`/admin/kunder/${id}`);
 }
 
 const inquiryUpdate = z.object({ status: z.string().refine((s) => STATUSES.includes(s)), notes: z.string().max(10000) });
@@ -125,7 +146,12 @@ export async function updateInquiryAction(id: string, _prev: ActionState, fd: Fo
   await requireAdmin();
   const p = inquiryUpdate.safeParse({ status: fd.get("status"), notes: String(fd.get("notes") ?? "") });
   if (!p.success) return { error: "Ugyldig status eller notat." };
-  await updateInquiryFollowUp(id, p.data.status, p.data.notes);
+  try {
+    await updateInquiryFollowUp(id, p.data.status, p.data.notes);
+  } catch (e) {
+    logError("inquiry.update", e, { inquiryId: id });
+    return { error: "Kunne ikke lagre. Prøv igjen." };
+  }
   revalidatePath(`/admin/foresporsler/${id}`);
   revalidatePath("/admin");
   return { ok: true };
@@ -134,13 +160,22 @@ export async function updateInquiryAction(id: string, _prev: ActionState, fd: Fo
 export async function deleteInquiryAction(id: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin();
   if (fd.get("confirm") !== "on") return { error: "Kryss av for å bekrefte at forespørselen skal slettes." };
-  await deleteInquiry(id);
+  try {
+    await deleteInquiry(id);
+  } catch (e) {
+    logError("inquiry.delete", e, { inquiryId: id });
+    return { error: "Kunne ikke slette forespørselen. Prøv igjen." };
+  }
   redirect("/admin/foresporsler");
 }
 
 export async function retryEmailAction(jobId: string, inquiryId: string): Promise<void> {
   await requireAdmin();
-  await processJob(jobId);
+  try {
+    await processJob(jobId);
+  } catch (e) {
+    logError("email.retry", e, { jobId });
+  }
   revalidatePath(`/admin/foresporsler/${inquiryId}`);
   revalidatePath("/admin");
 }
@@ -175,4 +210,12 @@ export async function deleteByEmailAction(_prev: ActionState, fd: FormData): Pro
   revalidatePath("/admin/foresporsler");
   revalidatePath("/admin");
   return { ok: true, message: count === 0 ? "Fant ingen forespørsler fra denne adressen." : `Slettet ${count} ${count === 1 ? "forespørsel" : "forespørsler"} med tilhørende e-postjobber.` };
+}
+
+export async function restoreVersionAction(customerId: string, versionNumber: number): Promise<void> {
+  await requireAdmin();
+  if (!Number.isInteger(versionNumber) || versionNumber < 1) return;
+  if (!(await restoreVersionAsDraft(customerId, versionNumber))) return;
+  revalidatePath(`/admin/kunder/${customerId}`);
+  redirect(`/admin/kunder/${customerId}?gjenopprettet=${versionNumber}`);
 }

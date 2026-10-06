@@ -7,6 +7,7 @@ import { InquirySnapshot } from "@/lib/inquiry";
 import { StatusBadge, EMAIL_STATUS } from "@/components/AdminBits";
 import { DeleteForm, StatusForm } from "@/components/InquiryAdminForms";
 import { retryEmailAction } from "../../actions";
+import { mailtoHref } from "@/lib/content";
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (<><dt className="eyebrow pt-1">{k}</dt><dd className="min-w-0 break-words">{children}</dd></>);
@@ -29,6 +30,10 @@ export default async function InquiryDetail({ params }: { params: Promise<{ id: 
           <StatusBadge status={i.status} />
         </div>
         <p className="mt-1 text-muted">{i.customer.name} · <span className="mono-num">{i.reference}</span> · innsendt {formatDateTime(i.createdAt)}</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <a className="btn btn-dark btn-sm" href={`mailto:${encodeURIComponent(i.contactEmail).replace(/%40/g, "@")}?subject=${encodeURIComponent(`Re: Forespørsel ${i.reference} – ${i.eventName}`)}`}>Svar på e-post</a>
+          {i.contactPhone && <a className="btn btn-outline btn-sm" href={`tel:${i.contactPhone.replace(/[^\d+]/g, "")}`}>Ring {i.contactPhone}</a>}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
@@ -43,14 +48,14 @@ export default async function InquiryDetail({ params }: { params: Promise<{ id: 
             <Row k="Ekspress">{i.express ? "Ønsker levering innen 24 timer" : "Nei"}</Row>
             <Row k="Trykk">{i.printUse ? "Ønsker å avklare bruk av bilder i trykk" : "Nei"}</Row>
             <Row k="Kontakt">{i.contactName}</Row>
-            <Row k="E-post"><a className="link" href={`mailto:${i.contactEmail}`}>{i.contactEmail}</a></Row>
+            <Row k="E-post"><a className="link" href={mailtoHref(i.contactEmail)}>{i.contactEmail}</a></Row>
             {i.contactPhone && <Row k="Telefon">{i.contactPhone}</Row>}
           </dl>
         </section>
 
         <section className="card p-6 min-w-0" aria-labelledby="snap">
           <h2 id="snap" className="title text-lg">Pris slik kunden så den</h2>
-          <p className="text-sm text-muted mt-1">{s.agreementLabel} · versjon {s.versionNumber}. Endres ikke av senere publiseringer.</p>
+          <p className="text-sm text-muted mt-1">{s.agreementLabel} · <Link className="link" href={`/admin/kunder/${i.customerId}/versjoner/${s.versionNumber}`}>versjon {s.versionNumber}</Link>. Endres ikke av senere publiseringer.</p>
           {s.package ? (
             <div className="mt-4 text-[15px]">
               <p className="font-semibold">{s.package.name}</p>

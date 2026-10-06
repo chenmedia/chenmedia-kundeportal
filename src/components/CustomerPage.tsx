@@ -1,5 +1,5 @@
-import type { Content, GalleryItem, PackageContent } from "@/lib/content";
-import { DEFAULT_CTA, DEFAULT_GALLERY_TITLE, DEFAULT_INTRO } from "@/lib/content";
+import type { Content, PackageContent } from "@/lib/content";
+import { DEFAULT_CTA, DEFAULT_GALLERY_TITLE, DEFAULT_INTRO, mailtoHref } from "@/lib/content";
 import { formatAddonPrice, formatDate, formatPackagePrice } from "@/lib/format";
 import { Logo } from "./Logo";
 import { InquiryForm } from "./InquiryForm";
@@ -7,6 +7,8 @@ import { OpenFormButton, SelectPackageButton } from "./SelectPackageButton";
 import { RequestDialog } from "./RequestDialog";
 import { StickyCta } from "./StickyCta";
 import { PrintButton } from "./PrintButton";
+import { PrintTitle } from "./PrintTitle";
+import { Gallery } from "./Gallery";
 import { ArrowDown, CheckIcon } from "./Icons";
 
 export interface CustomerPageProps {
@@ -50,7 +52,7 @@ function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number;
       )}
       <div className="pkg-body p-6 md:p-7 flex flex-col flex-1">
         <div className="pkg-head flex items-start justify-between gap-4">
-          <h3 className="display text-xl">{p.name}</h3>
+          <h3 className="display text-xl min-w-0 break-words [overflow-wrap:anywhere]">{p.name}</h3>
           <span className="step-num text-muted" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
         </div>
         <div className="pkg-price mt-6 pt-6 hairline">
@@ -65,7 +67,7 @@ function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number;
           <SelectPackageButton
             packageId={p.id}
             label={p.custom ? "Beskriv behovet ditt" : "Forespør denne pakken"}
-            ariaLabel={`${p.custom ? "Beskriv behovet ditt" : "Forespør"} – ${p.name}`}
+            ariaLabel={`${p.custom ? "Beskriv behovet ditt" : "Forespør denne pakken"} – ${p.name}`}
           />
         </div>
       </div>
@@ -73,48 +75,16 @@ function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number;
   );
 }
 
-/**
- * Galleri med ulik komposisjon etter antall bilder (1 = bred banner, 3 og 5 = ett stort bilde + mindre,
- * ellers rutenett). På mobil legges alt i én eller to kolonner.
- */
-const GALLERY_LAYOUTS: Record<number, { grid: string; item: (i: number) => string }> = {
-  1: { grid: "grid-cols-1", item: () => "aspect-[16/10] md:aspect-[21/9]" },
-  2: { grid: "grid-cols-1 md:grid-cols-2", item: () => "aspect-[4/3]" },
-  3: {
-    grid: "grid-cols-2 md:grid-cols-3 md:grid-rows-2 md:h-[30rem]",
-    item: (i) => (i === 0 ? "col-span-2 aspect-[16/9] md:aspect-auto md:row-span-2" : "aspect-[4/3] md:aspect-auto"),
-  },
-  4: { grid: "grid-cols-2 md:grid-cols-4", item: () => "aspect-[4/3] md:aspect-[3/4]" },
-  5: {
-    grid: "grid-cols-2 md:grid-cols-4 md:grid-rows-2 md:h-[30rem]",
-    item: (i) => (i === 0 ? "col-span-2 aspect-[16/9] md:aspect-auto md:row-span-2" : "aspect-[4/3] md:aspect-auto"),
-  },
-  6: { grid: "grid-cols-2 md:grid-cols-3", item: () => "aspect-[4/3]" },
-};
-
-function Gallery({ items, title, mediaUrl }: { items: GalleryItem[]; title: string; mediaUrl: (assetId: string) => string }) {
-  const layout = GALLERY_LAYOUTS[Math.min(items.length, 6)];
-  return (
-    <section id="galleri" className="wrap py-10 md:py-14 gallery-section" aria-labelledby="galleri-title">
-      <p className="eyebrow mb-3">Eksempler</p>
-      <h2 id="galleri-title" className="section-title">{title}</h2>
-      <ul className={`mt-8 grid gap-3 md:gap-4 ${layout.grid}`}>
-        {items.map((g, i) => (
-          <li key={g.id} className={`relative min-h-0 overflow-hidden rounded-[20px] border border-line bg-ink ${layout.item(i)}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={mediaUrl(g.imageId)} alt={g.alt} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-const STEPS = [
+const steps = (contactName: string) => [
   { t: "Velg pakke", d: "Eller beskriv behovet ditt hvis du er usikker." },
   { t: "Send forespørsel", d: "Det tar omtrent to minutter." },
-  { t: "Vi tar kontakt", d: "Kai avklarer tilgjengelighet og detaljer med deg." },
+  { t: "Vi tar kontakt", d: `${contactName} avklarer tilgjengelighet og detaljer med deg.` },
 ];
+
+/** Filnavn ved «Lagre som PDF», f.eks. «Chen Media - Prisliste OBOS - Prisliste V2026». */
+export function pdfTitle(customerName: string, agreementLabel: string) {
+  return ["Chen Media", `Prisliste ${customerName}`, agreementLabel].filter(Boolean).join(" - ");
+}
 
 export function CustomerPage(props: CustomerPageProps) {
   const { content, customerName } = props;
@@ -124,6 +94,7 @@ export function CustomerPage(props: CustomerPageProps) {
 
   return (
     <div>
+      <PrintTitle title={pdfTitle(customerName, content.agreementLabel)} />
       <a href="#hovedinnhold" className="skip-link">Hopp til innhold</a>
       <header className="print-head wrap flex items-center justify-between gap-4 py-6">
         <Logo height={40} />
@@ -149,7 +120,7 @@ export function CustomerPage(props: CustomerPageProps) {
             <div className="hero-media relative aspect-[16/9] lg:aspect-[4/3] rounded-[28px] overflow-hidden border border-line bg-ink">
               {hero ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={hero} alt={content.heroImageAlt || `Bilde fra et event fotografert av Chen Media for ${customerName}`} className="absolute inset-0 h-full w-full object-cover" />
+                <img src={hero} fetchPriority="high" alt={content.heroImageAlt || `Bilde fra et event fotografert av Chen Media for ${customerName}`} className="absolute inset-0 h-full w-full object-cover" />
               ) : (
                 <div role="img" aria-label="Plassholder for eventbilde" className="absolute inset-0">
                   {/* Krusedullen: stor og beskåret i hjørnet, 100 % hvit */}
@@ -187,7 +158,10 @@ export function CustomerPage(props: CustomerPageProps) {
 
         {/* Bilder fra oppdrag */}
         {content.gallery.length > 0 && (
-          <Gallery items={content.gallery} title={content.galleryTitle || DEFAULT_GALLERY_TITLE} mediaUrl={props.mediaUrl} />
+          <Gallery
+            items={content.gallery.map((g) => ({ id: g.id, src: props.mediaUrl(g.imageId), alt: g.alt, caption: g.caption }))}
+            title={content.galleryTitle || DEFAULT_GALLERY_TITLE}
+          />
         )}
 
         {/* Tillegg og praktisk */}
@@ -204,7 +178,7 @@ export function CustomerPage(props: CustomerPageProps) {
                     {content.addons.map((a) => (
                       <tr key={a.id}>
                         <td>
-                          <span className="font-semibold">{a.name}</span>
+                          <span className="font-semibold break-words">{a.name}</span>
                           {a.note && <span className="block text-sm text-muted">{a.note}</span>}
                         </td>
                         <td className="text-right sm:whitespace-nowrap mono-num text-[13px] sm:text-[14px]">{formatAddonPrice(a)}</td>
@@ -233,7 +207,7 @@ export function CustomerPage(props: CustomerPageProps) {
                       <p className="eyebrow eyebrow-dark">Spørsmål om avtalen?</p>
                       <p className="mt-2 text-[15px]">
                         Kontakt {content.contactName || "Chen Media"}:{" "}
-                        <a href={`mailto:${content.contactEmail}`} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
+                        <a href={mailtoHref(content.contactEmail)} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
                       </p>
                     </div>
                   </div>
@@ -259,7 +233,7 @@ export function CustomerPage(props: CustomerPageProps) {
                 </div>
               </div>
               <ol className="grid gap-4">
-                {STEPS.map((s, i) => (
+                {steps(content.contactName || "Chen Media").map((s, i) => (
                   <li key={s.t} className="flex gap-5 items-start rounded-2xl bg-cream/60 border border-line p-5">
                     <span className="step-num mt-1">{String(i + 1).padStart(2, "0")}</span>
                     <div>
@@ -284,7 +258,7 @@ export function CustomerPage(props: CustomerPageProps) {
             <h2 className="eyebrow eyebrow-dark">Spørsmål? Kontakt {content.contactName || "Chen Media"}</h2>
             {content.contactEmail && (
               <p className="mt-3">
-                <a href={`mailto:${content.contactEmail}`} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
+                <a href={mailtoHref(content.contactEmail)} className="underline underline-offset-4 decoration-accent decoration-2 break-all">{content.contactEmail}</a>
               </p>
             )}
             <p className="footer-version eyebrow eyebrow-dark mt-6">Avtaleversjon</p>
@@ -316,6 +290,7 @@ export function CustomerPage(props: CustomerPageProps) {
           disabledReason={props.formDisabledReason}
           emailConfigured={!!props.emailConfigured}
           contactEmail={content.contactEmail}
+          contactName={content.contactName || "Chen Media"}
         />
       </RequestDialog>
     </div>

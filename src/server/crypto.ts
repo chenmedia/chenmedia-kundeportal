@@ -12,8 +12,14 @@ export function generateToken(): string {
   return crypto.randomBytes(32).toString("base64url");
 }
 
+/** Eksempelverdier fra .env.example som aldri skal brukes i drift (alle med tilgang til repoet kjenner dem). */
+const PLACEHOLDER_SECRETS = new Set(["bytt-meg-lokal-utvikling-bytt-meg-lokal"]);
+
 function secretKey(): Buffer {
   const s = process.env.APP_SECRET;
+  if (s && PLACEHOLDER_SECRETS.has(s) && process.env.NODE_ENV === "production") {
+    throw new Error("APP_SECRET er eksempelverdien fra .env.example. Generer en egen hemmelighet.");
+  }
   if (!s || s.length < 16) {
     if (process.env.NODE_ENV === "production") throw new Error("APP_SECRET må settes (minst 16 tegn) i produksjon.");
     return crypto.createHash("sha256").update("dev-only-secret").digest();

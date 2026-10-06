@@ -3,20 +3,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddonContent, Content, DEFAULT_CTA, DEFAULT_GALLERY_TITLE, MAX_GALLERY, MAX_PACKAGES, PackageContent, addonBasis, addonBasisLabels, newId } from "@/lib/content";
 import { saveDraftAction } from "@/app/admin/actions";
+import { formatKr, parseKroner } from "@/lib/format";
+import { useEditorState } from "./EditorState";
 
 interface Asset { id: string; name: string; width: number; height: number }
 
 function PriceInput({ id, valueOre, onChange, label }: { id: string; valueOre: number | null; onChange: (ore: number | null) => void; label: string }) {
   const [text, setText] = useState(valueOre === null ? "" : String(valueOre / 100).replace(".", ","));
+  const ore = parseKroner(text);
+  const unreadable = text.trim() !== "" && ore === null;
   return (
     <div>
       <label htmlFor={id} className="field-label">{label}</label>
-      <input id={id} inputMode="decimal" className="input" value={text} placeholder="0" onChange={(e) => {
+      <input id={id} inputMode="decimal" className="input" value={text} placeholder="0" aria-invalid={unreadable || undefined} aria-describedby={`${id}-h`} onChange={(e) => {
         const t = e.target.value;
         setText(t);
-        const n = Number(t.replace(/\s/g, "").replace(",", "."));
-        onChange(t.trim() === "" || Number.isNaN(n) || n < 0 ? null : Math.round(n * 100));
+        onChange(parseKroner(t));
       }} />
+      <p id={`${id}-h`} className={unreadable ? "field-error" : "field-hint"} aria-live="polite">
+        {unreadable ? "Kan ikke tolke beløpet. Skriv for eksempel 16 000 eller 1 250,50." : ore !== null ? `= ${formatKr(ore)}` : "\u00a0"}
+      </p>
     </div>
   );
 }
@@ -111,6 +117,8 @@ export function DraftEditor(props: {
   initialName: string;
   needsRename: boolean;
   initialContent: Content;
+  /** Tidspunktet utkastet sist ble lagret da siden ble åpnet (ISO). Brukes til å oppdage samtidige endringer. */
+  draftUpdatedAt: string | null;
   assets: Asset[];
 }) {
   const [name, setName] = useState(props.initialName);
@@ -118,13 +126,18 @@ export function DraftEditor(props: {
   const [assets, setAssets] = useState<Asset[]>(props.assets);
   const saved = useRef(JSON.stringify([props.initialName, props.initialContent]));
   const [dirty, setDirty] = useState(false);
+  const shared = useEditorState();
   const [saving, setSaving] = useState(false);
+  const expectedAt = useRef<string | null>(props.draftUpdatedAt);
+  const [conflict, setConflict] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [uploadErr, setUploadErr] = useState("");
   const [uploading, setUploading] = useState(false);
 
   const snapshot = useMemo(() => JSON.stringify([name, c]), [name, c]);
   useEffect(() => { setDirty(snapshot !== saved.current); }, [snapshot]);
+  const { setDirty: setSharedDirty } = shared;
+  useEffect(() => { setSharedDirty(dirty); return () => setSharedDirty(false); }, [dirty, setSharedDirty]);
 
   // Advar ved ulagrede endringer: lukking/reload og klikk på interne lenker.
   useEffect(() => {
@@ -144,12 +157,18 @@ export function DraftEditor(props: {
   const patchPkg = (i: number, p: Partial<PackageContent>) => setC((x) => ({ ...x, packages: x.packages.map((k, n) => (n === i ? { ...k, ...p } : k)) }));
   const patchAddon = (i: number, p: Partial<AddonContent>) => setC((x) => ({ ...x, addons: x.addons.map((k, n) => (n === i ? { ...k, ...p } : k)) }));
 
-  async function save() {
-    setSaving(true); setStatus(null);
+  async function save(overwrite = false) {
+    setSaving(true); setStatus(null); setConflict(false);
     try {
-      const r = await saveDraftAction(props.customerId, name, JSON.stringify(c));
-      if (r.ok) { saved.current = snapshot; setDirty(false); setStatus({ kind: "ok", text: "Utkastet er lagret." }); }
-      else setStatus({ kind: "err", text: r.error ?? "Kunne ikke lagre. Prøv igjen." });
+      const r = await saveDraftAction(props.customerId, name, JSON.stringify(c), overwrite ? null : expectedAt.current);
+      if (r.ok) {
+        saved.current = snapshot; setDirty(false);
+        if (r.updatedAt) expectedAt.current = r.updatedAt;
+        setStatus({ kind: "ok", text: "Utkastet er lagret." });
+      } else {
+        setConflict(!!r.conflict);
+        setStatus({ kind: "err", text: r.error ?? "Kunne ikke lagre. Prøv igjen." });
+      }
     } catch {
       setStatus({ kind: "err", text: "Kunne ikke lagre (mistet forbindelsen?). Endringene dine er fortsatt her. Prøv igjen." });
     } finally { setSaving(false); }
@@ -214,6 +233,12 @@ export function DraftEditor(props: {
           {dirty && !status && <span><span className="status-dot" aria-hidden="true" />Ulagrede endringer</span>}
           {dirty && status?.kind === "ok" && <span><span className="status-dot" aria-hidden="true" />Ulagrede endringer</span>}
         </p>
+        {conflict && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => window.location.reload()}>Last siden på nytt</button>
+            <button type="button" className="btn btn-outline btn-sm !border-err !text-err hover:!bg-err hover:!text-white" disabled={saving} onClick={() => void save(true)}>Lagre og overskriv</button>
+          </div>
+        )}
       </div>
 
       <Section id="s-kunde" title="Kunde og introduksjon">
@@ -229,7 +254,7 @@ export function DraftEditor(props: {
         <Text id="cta" label="Tekst på hovedknappen" value={c.ctaLabel} max={60} onChange={(v) => patch({ ctaLabel: v })} hint={`Standard: «${DEFAULT_CTA}».`} />
         <div className="grid gap-5 sm:grid-cols-2">
           <Text id="agr" label="Avtaleetikett" value={c.agreementLabel} max={60} onChange={(v) => patch({ agreementLabel: v })} hint="Eksempel: «Prisliste V2026». Påkrevd for publisering." />
-          <Text id="valid" label="Gyldighetstekst (valgfritt)" value={c.validityText} max={200} onChange={(v) => patch({ validityText: v })} hint="Vises bare hvis avtalt startdato faktisk er registrert her." />
+          <Text id="valid" label="Gyldighetstekst (valgfritt)" value={c.validityText} max={200} onChange={(v) => patch({ validityText: v })} hint="Vises nederst på kundesiden, under avtaleversjonen. La stå tom hvis det ikke gjelder." />
         </div>
       </Section>
 
@@ -284,6 +309,7 @@ export function DraftEditor(props: {
             <fieldset key={g.id} className="border border-line rounded-2xl p-4 grid gap-3">
               <legend className="title px-2">Galleribilde {i + 1}</legend>
               <ImageSelect id={`g${i}-img`} label="Bilde" value={g.imageId} assets={assets} noneLabel="Velg bilde" onChange={(v) => v && patchGallery(i, { imageId: v })} />
+              <Text id={`g${i}-cap`} label="Bildetekst (vises i galleriet)" value={g.caption} max={120} onChange={(v) => patchGallery(i, { caption: v })} hint="F.eks. «Summer Party 2026 · 4 timer». Valgfritt." />
               <Text id={`g${i}-alt`} label="Beskrivelse av bildet" value={g.alt} max={200} onChange={(v) => patchGallery(i, { alt: v })} hint="For skjermlesere. La stå tom hvis bildet bare er pynt." />
               <RowButtons i={i} len={c.gallery.length} what={`galleribilde ${i + 1}`}
                 onMove={(d) => patch({ gallery: move(c.gallery, i, d) })}
@@ -291,7 +317,7 @@ export function DraftEditor(props: {
             </fieldset>
           ))}
           <button type="button" className="btn btn-outline btn-sm self-start" disabled={c.gallery.length >= MAX_GALLERY || assets.length === 0}
-            onClick={() => patch({ gallery: [...c.gallery, { id: newId("gal"), imageId: assets[0].id, alt: "" }] })}>
+            onClick={() => patch({ gallery: [...c.gallery, { id: newId("gal"), imageId: assets[0].id, alt: "", caption: "" }] })}>
             + Legg til galleribilde
           </button>
           {assets.length === 0 && <p className="field-hint">Last opp bilder først.</p>}

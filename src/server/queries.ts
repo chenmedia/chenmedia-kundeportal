@@ -2,6 +2,7 @@
  * Lesemodeller for administrasjonen. Sider og API-ruter henter data herfra i stedet for å
  * kalle databasen direkte, slik at spørringer ligger på ett sted og kan gjenbrukes.
  */
+import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 
 export interface NewInquirySnapshot {
@@ -41,22 +42,50 @@ export async function dashboardData(search: string) {
   return { customers, newInquiries, failedJobs, newCountByCustomer: new Map(newCounts.map((c) => [c.customerId, c._count])) };
 }
 
-export async function inquiryList(filters: { status?: string; customerId?: string; failedEmail?: boolean }) {
-  const [customers, list] = await Promise.all([
+export interface InquiryFilters { status?: string; customerId?: string; failedEmail?: boolean; q?: string }
+
+/** Felles filter for listen og CSV-eksporten. Søket treffer arrangement, kontaktperson, e-post, referanse og kunde. */
+function inquiryWhere(f: InquiryFilters): Prisma.InquiryWhereInput {
+  const q = f.q?.trim();
+  return {
+    ...(f.status ? { status: f.status } : {}),
+    ...(f.customerId ? { customerId: f.customerId } : {}),
+    ...(f.failedEmail ? { emailJobs: { some: { status: "failed" } } } : {}),
+    ...(q
+      ? {
+          OR: [
+            { eventName: { contains: q, mode: "insensitive" } },
+            { contactName: { contains: q, mode: "insensitive" } },
+            { contactEmail: { contains: q, mode: "insensitive" } },
+            { reference: { contains: q, mode: "insensitive" } },
+            { customer: { name: { contains: q, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
+  };
+}
+
+export const INQUIRY_PAGE = 100;
+export const INQUIRY_MAX = 2000;
+
+export async function inquiryList(filters: InquiryFilters, take = INQUIRY_PAGE) {
+  const where = inquiryWhere(filters);
+  const [customers, list, total] = await Promise.all([
     db.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.inquiry.findMany({
-      where: {
-        ...(filters.status ? { status: filters.status } : {}),
-        ...(filters.customerId ? { customerId: filters.customerId } : {}),
-        ...(filters.failedEmail ? { emailJobs: { some: { status: "failed" } } } : {}),
-      },
+      where,
       orderBy: { createdAt: "desc" },
       include: { customer: true, emailJobs: { select: { status: true } } },
-      take: 200,
+      take: Math.min(Math.max(take, 1), INQUIRY_MAX),
     }),
+    db.inquiry.count({ where }),
   ]);
-  return { customers, list };
+  return { customers, list, total };
 }
+
+/** Alle forespørsler som matcher filteret (til CSV), nyeste først. */
+export const inquiriesForExport = (filters: InquiryFilters) =>
+  db.inquiry.findMany({ where: inquiryWhere(filters), orderBy: { createdAt: "desc" }, include: { customer: true }, take: 10_000 });
 
 export const inquiryDetail = (id: string) =>
   db.inquiry.findUnique({ where: { id }, include: { customer: true, version: true, emailJobs: { orderBy: { createdAt: "asc" } } } });

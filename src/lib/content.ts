@@ -50,6 +50,8 @@ const galleryItemSchema = z.object({
   imageId: z.string().min(1),
   /** Tom = dekorativt bilde (skjules for skjermlesere) */
   alt: optionalText(200),
+  /** Vises under bildet, f.eks. «Summer Party 2026 · 4 timer». */
+  caption: optionalText(120),
 });
 export type GalleryItem = z.infer<typeof galleryItemSchema>;
 
@@ -110,9 +112,16 @@ export function canonical(content: Content): string {
   return JSON.stringify(contentSchema.parse(content));
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Tegn som aldri hører hjemme i en adresse vi sender til eller lenker til: ? & = # % gir parametre i mailto-lenker
+// («a@b.no?bcc=x@y.no»), og < > ( ) , ; : " \\ / gir flere mottakere eller visningsnavn.
+const EMAIL_RE = /^[^\s@<>(),;:\\"?&=#%\p{Cc}]+@[^\s@<>(),;:\\"?&=#%/\p{Cc}]+\.[^\s@<>(),;:\\"?&=#%/\p{Cc}]+$/u;
 export function isEmail(v: string): boolean {
   return EMAIL_RE.test(v) && v.length <= 254;
+}
+
+/** mailto-lenke som aldri kan bære ekstra parametre (bcc, body), selv om adressen ikke er validert. */
+export function mailtoHref(address: string): string {
+  return `mailto:${encodeURIComponent(address).replace(/%40/g, "@")}`;
 }
 
 /** Krav for publisering. Returnerer feilmeldinger (tom liste = OK). */
@@ -126,10 +135,20 @@ export function publishProblems(content: Content, customerName: string, needsRen
   content.packages.forEach((pk, i) => {
     const n = pk.name.trim() || `Pakke ${i + 1}`;
     if (!pk.name.trim()) p.push(`Pakke ${i + 1} mangler navn.`);
-    if (pk.priceOre === null || pk.priceOre < 0) p.push(`${n}: pris mangler eller er negativ.`);
+    if (pk.priceOre === null) p.push(`${n}: pris mangler.`);
+    else if (pk.priceOre <= 0) p.push(`${n}: prisen må være større enn 0 kr.`);
     if (pk.priceType === "from" && !pk.priceNote.trim() && !pk.description.trim())
       p.push(`${n}: fra-pris krever en forklarende tekst.`);
   });
+  const seen = new Set<string>();
+  const reported = new Set<string>();
+  for (const pk of content.packages) {
+    const nm = pk.name.trim();
+    const key = nm.toLowerCase();
+    if (!nm) continue;
+    if (seen.has(key) && !reported.has(key)) { p.push(`To pakker heter «${nm}». Gi dem ulike navn.`); reported.add(key); }
+    seen.add(key);
+  }
   content.addons.forEach((a, i) => {
     const n = a.name.trim() || `Tillegg ${i + 1}`;
     if (!a.name.trim()) p.push(`Tillegg ${i + 1} mangler navn.`);
@@ -138,4 +157,24 @@ export function publishProblems(content: Content, customerName: string, needsRen
     } else if (a.amountOre === null) p.push(`${n}: beløp mangler.`);
   });
   return p;
+}
+
+/** Pakkepriser under dette (øre) gir en advarsel ved publisering, typisk en tastefeil. */
+export const LOW_PRICE_WARNING_ORE = 10_000;
+
+/** Ting som ikke stopper publisering, men som admin bør bekrefte. Tom liste = ingenting å melde. */
+export function publishWarnings(content: Content): string[] {
+  const w: string[] = [];
+  content.packages.forEach((pk, i) => {
+    const n = pk.name.trim() || `Pakke ${i + 1}`;
+    if (pk.priceOre !== null && pk.priceOre > 0 && pk.priceOre < LOW_PRICE_WARNING_ORE) {
+      w.push(`${n}: prisen er bare ${String(pk.priceOre / 100).replace(".", ",")} kr. Stemmer det?`);
+    }
+  });
+  content.addons.forEach((a, i) => {
+    const n = a.name.trim() || `Tillegg ${i + 1}`;
+    if (a.basis === "percent" && a.percent !== null && a.percent > 100) w.push(`${n}: prosenttillegget er over 100 %.`);
+    if (a.basis !== "percent" && a.amountOre === 0) w.push(`${n}: beløpet er 0 kr.`);
+  });
+  return w;
 }
