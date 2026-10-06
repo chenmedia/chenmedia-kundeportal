@@ -43,6 +43,12 @@ npm run dev                 # http://localhost:3000
 - **Bilder lokalt** lagres på disk i `STORAGE_DIR`. Med `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
   satt brukes Supabase Storage i stedet (samme kode som i drift).
 
+## Administrasjon (utvalg)
+
+- **Forespørsler:** søk (arrangement, kontaktperson, e-post, referanse, kunde), filter på status/kunde/feilet e-post, «Vis flere» (100 om gangen) og CSV-eksport av alle treff (`/admin/foresporsler/eksport`, semikolon + UTF-8 for norsk Excel, celler som starter med `= + - @` får apostrof mot formelinjeksjon). Statuser: Ny, Under oppfølging, Avklart, Booket, Tapt, Avsluttet.
+- **Utkast:** lagring avvises hvis noen andre har lagret i mellomtiden (annen fane eller administrator). Du kan da laste siden på nytt eller velge «Lagre og overskriv».
+- **Versjoner:** «Gjenopprett som utkast» kopierer en gammel versjon inn i utkastet. Publiserte versjoner endres aldri.
+
 ## Miljøvariabler
 
 | Variabel | Formål |
@@ -142,7 +148,7 @@ CHROMIUM_PATH=/sti/til/chromium npx playwright test   # utelat CHROMIUM_PATH hvi
 - Testene nullstiller databasene `*_test` og `*_e2e` og nekter å røre andre databaser.
 - Rate limiting bruker `x-forwarded-for`, som bare er pålitelig bak en proxy du kontrollerer.
 - E-post er bare testet mot mockede svar. **Ekte levering via Resend er ikke verifisert.**
-- Ingen automatisk gjenoppretting av gamle versjoner (kopier manuelt inn i utkastet).
+- Gjenoppretting av en gammel versjon legger den inn som utkast («Gjenopprett som utkast» i versjonshistorikken), den setter ikke versjonen aktiv. Det finnes ingen revisjonslogg over hvem som publiserte eller endret hva.
 - Logoen er raster (PNG) hentet fra brandguiden. Helvetica faller tilbake til Arial/Liberation Sans
   på maskiner uten Helvetica.
 

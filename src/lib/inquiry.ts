@@ -38,6 +38,8 @@ export const STATUS_LABELS: Record<string, string> = {
   new: "Ny",
   following_up: "Under oppfølging",
   clarified: "Avklart",
+  booked: "Booket",
+  lost: "Tapt",
   closed: "Avsluttet",
 };
 export const STATUSES = Object.keys(STATUS_LABELS);

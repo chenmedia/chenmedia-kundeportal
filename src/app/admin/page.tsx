@@ -3,6 +3,7 @@ import { dashboardData } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
 import { formatDateTime } from "@/lib/format";
 import { duplicateAction } from "./actions";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
 export default async function AdminHome({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   await requireAdmin();
@@ -37,6 +38,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             ))}
           </ul>
         )}
+        <p className="mt-3"><Link className="link text-sm font-semibold" href="/admin/foresporsler">Se alle forespørsler →</Link></p>
       </section>
 
       <section aria-labelledby="oversikt" className="card p-6">
@@ -73,7 +75,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                         <div className="flex gap-2">
                           <Link href={`/admin/kunder/${c.id}`} className="btn btn-dark btn-sm" aria-label={`Åpne ${c.name}`}>Åpne</Link>
                           <form action={duplicateAction.bind(null, c.id)}>
-                            <button className="btn btn-outline btn-sm" aria-label={`Dupliser ${c.name}`}>Dupliser</button>
+                            <ConfirmButton className="btn btn-outline btn-sm" ariaLabel={`Dupliser ${c.name}`} message={`Opprette en kopi av ${c.name}? Kopien får samme innhold og må få et nytt navn før den kan publiseres.`}>Dupliser</ConfirmButton>
                           </form>
                         </div>
                       </td>
