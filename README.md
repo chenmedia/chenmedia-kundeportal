@@ -175,10 +175,16 @@ Status flyttes manuelt i HubSpot. Feil lagres per forespørsel (`CrmSync`), vise
 
 **Oppsett**
 
-1. Opprett en Private App i HubSpot med scopes: `crm.objects.contacts.read/write`, `crm.objects.companies.read/write`,
-   `crm.objects.deals.read/write`, `crm.objects.owners.read` og `crm.schemas.deals.read/write` (egenskaper).
-   Oppgaver opprettes med kontakt-/dealscopene. Gir oppgaveopprettelse 403 («failed» med feilkode `http_403` i admin),
-   legg til scope for oppgaver/engasjementer. Rettighetene er ikke testet mot den faktiske kontoen.
+1. Opprett en app med **statisk autentisering** på HubSpots utviklerplattform (private apper/«legacy apps» er utdatert og
+   kan ikke lenger opprettes). Med HubSpot CLI: `hs project create` og velg app, sett `auth.type` til `static` og
+   `auth.distribution` til `private` i `app-hsmeta.json` (fjern `redirectUrls`), legg inn scopes under, kjør
+   `hs project upload` og installer appen på kontoen. Tilgangstokenet står i appens innstillinger i HubSpot
+   (`hs project open`, velg appen, fanen *Auth*). Se
+   [HubSpots veiledning](https://developers.hubspot.com/docs/apps/developer-platform/build-apps/authentication/overview).
+   Scopes (statisk autentisering støtter bare påkrevde scopes): `crm.objects.contacts.read/write`,
+   `crm.objects.companies.read/write`, `crm.objects.deals.read/write`, `crm.objects.owners.read` og
+   `crm.schemas.deals.read/write` (egenskaper). Oppgaver opprettes med kontakt-/dealscopene. Gir oppgaveopprettelse 403
+   («failed» med feilkode `http_403` i admin), legg til scope for oppgaver/engasjementer. Rettighetene er ikke testet mot den faktiske kontoen.
 2. Kjør `HUBSPOT_ACCESS_TOKEN=... npm run hubspot:setup` (eller legg token i `.env`). Skriptet oppretter dealegenskapene
    (trygt å kjøre flere ganger) og sjekker at pipelinen og steget finnes.
 3. Sett `HUBSPOT_ACCESS_TOKEN` (Sensitive), `HUBSPOT_OWNER_ID` og `HUBSPOT_PORTAL_ID` i Vercel og redeploy. Integrasjonen er
