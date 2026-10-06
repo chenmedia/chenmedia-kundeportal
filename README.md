@@ -85,6 +85,9 @@ er klargjort (`vercel.json`, region `cdg1` (Paris) nær Supabase-prosjektet i eu
    `POSTGRES_URL_NON_POOLING` som `DIRECT_URL`. Full liste: `DATABASE_URL` (pooler), `DIRECT_URL`, `APP_SECRET`,
    `APP_URL` (den offentlige adressen), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
    `SUPABASE_STORAGE_BUCKET`, `NOTIFY_EMAIL`. Marker nøkler og passord som *Sensitive*.
+   Produksjonsdomenet er `https://booking.chenmedia.no`: sett `APP_URL` til den adressen (og legg domenet til under
+   Vercel → Settings → Domains som produksjonsdomene). Kundelenker bygges fra `APP_URL` når de kopieres, så
+   lenker kopiert før domenebyttet må kopieres på nytt.
 3. **Vercel → Settings → Deployment Protection:** slå av *Vercel Authentication* for produksjon.
    Ellers møter kundene en Vercel-innlogging i stedet for prislisten. Kundelenken (32 byte tilfeldig
    token) er tilgangsbeskyttelsen. Innhold beskyttes av `noindex` og `no-store`.
