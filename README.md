@@ -156,7 +156,7 @@ så og beskytter mot utdaterte versjoner. Etter innsending overføres forespørs
 2. Selskapet finnes på kundenavn (oldest first), ellers opprettes det. ID-en bufres på kunden.
 3. Det opprettes en deal i «Sales Pipeline» på steget «PRESENTATION - OPPORTUNITY IDENTIFIED», koblet til kontakten (på
    e-post) og selskapet, med:
-   - navn `SELSKAP // ARRANGEMENT - EVENTPHOTO - DD.MM.ÅÅÅÅ` (EVENTFILM hvis pakken nevner film/video, «dato ikke avklart» uten dato)
+   - navn `SELSKAP // ARRANGEMENT - EVENTPHOTO - DD/MM/ÅÅÅÅ` (EVENTFILM hvis pakken nevner film/video, «dato ikke avklart» uten dato)
    - closedate = siste dag i inneværende måned (norsk tid), prioritet «Medium»
    - deal type «Existing Business» hvis selskapet har en vunnet deal i HubSpot fra før, ellers «New Business»
    - beløp bare for fastpris-pakker (skjemaet har ikke et budsjettfelt), pluss pakke, avtaleversjon, dato, sted og lenke tilbake til admin

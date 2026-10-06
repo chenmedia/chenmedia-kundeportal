@@ -136,10 +136,10 @@ function dealDescription(i: Inquiry, s: InquirySnapshot): string {
   ].filter((l): l is string => l !== null).join("\n");
 }
 
-/** «SELSKAP // ARRANGEMENT - EVENTPHOTO eller EVENTFILM - DATO». Dato som dd.mm.åååå, eller «dato ikke avklart». */
+/** «SELSKAP // ARRANGEMENT - EVENTPHOTO eller EVENTFILM - DATO». Dato som dd/mm/åååå, eller «dato ikke avklart». */
 export function dealName(i: Pick<Inquiry, "eventName" | "eventDate" | "dateUnknown">, s: InquirySnapshot): string {
   const kind = s.package && /film|video/i.test(`${s.package.name} ${s.package.description ?? ""}`) ? "EVENTFILM" : "EVENTPHOTO";
-  const date = i.dateUnknown || !i.eventDate ? "dato ikke avklart" : i.eventDate.split("-").reverse().join(".");
+  const date = i.dateUnknown || !i.eventDate ? "dato ikke avklart" : i.eventDate.split("-").reverse().join("/");
   return `${s.customerName} // ${i.eventName} - ${kind} - ${date}`.slice(0, 250);
 }
 

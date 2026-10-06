@@ -129,7 +129,7 @@ describe("HubSpot: overføring", () => {
     const { r } = await submit("Fotofest AS", { eventName: "Sommerfest", eventDate: "2099-06-15" });
     await processCrmSync(r.inquiryId);
     const d = hs.deals[0];
-    expect(d.dealname).toBe("Fotofest AS // Sommerfest - EVENTPHOTO - 15.06.2099");
+    expect(d.dealname).toBe("Fotofest AS // Sommerfest - EVENTPHOTO - 15/06/2099");
     expect(d).toMatchObject({ pipeline: "default", dealstage: "appointmentscheduled", hs_priority: "medium", dealtype: "newbusiness", hubspot_owner_id: "555" });
     expect(d.closedate).toBe(endOfMonthCloseDate());
     expect(new Date(d.closedate).getTime()).toBeGreaterThan(Date.now() - 86400_000);
