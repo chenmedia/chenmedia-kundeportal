@@ -9,7 +9,8 @@ import { clientIp } from "@/server/rate-limit";
 import { parseContactForm } from "@/lib/customer-contact";
 import { DraftConflictError, assetsBelongToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, restoreVersionAsDraft, rotateToken, saveDraft, setActive } from "@/server/customers";
 import { deleteInquiry, deleteInquiriesByEmail, updateInquiryFollowUp, type DeleteByEmailResult } from "@/server/inquiries";
-import { processCrmSync } from "@/server/hubspot";
+import { hubspotConfigured, processCrmSync } from "@/server/hubspot";
+import { ensureHubspotSetup } from "@/server/hubspot-setup";
 import { contentImageIds, contentSchema, isEmail } from "@/lib/content";
 import { STATUSES } from "@/lib/inquiry";
 import { processJob } from "@/server/email";
@@ -190,6 +191,21 @@ export async function retryCrmSyncAction(inquiryId: string): Promise<void> {
   }
   revalidatePath(`/admin/foresporsler/${inquiryId}`);
   revalidatePath("/admin");
+}
+
+/** Oppretter dealegenskapene i HubSpot og sjekker pipeline og steg, med tokenet appen kjører med. Trygt å kjøre flere ganger. */
+export async function setupHubspotAction(): Promise<ActionState> {
+  await requireAdmin();
+  if (!hubspotConfigured()) return { error: "HubSpot er ikke koblet til (HUBSPOT_ACCESS_TOKEN mangler)." };
+  try {
+    const r = await ensureHubspotSetup();
+    return { ok: true, message: `${r.created.length ? `Opprettet ${r.created.length} egenskap${r.created.length === 1 ? "" : "er"}. ` : "Alle egenskapene fantes fra før. "}Nye forespørsler havner i «${r.pipelineLabel}», steget «${r.stageLabel}».` };
+  } catch (e) {
+    logError("hubspot.setup", e);
+    // Bare feilkoden vises: svar fra HubSpot kan inneholde personopplysninger. 403 betyr vanligvis manglende scope.
+    const code = e instanceof Error && /^http_\d+$/.test(e.message) ? ` (${e.message})` : "";
+    return { error: `Oppsettet feilet${code}. Sjekk at appen har scopes for deals-skjema (crm.schemas.deals.read/write), og at pipeline og steg finnes.` };
+  }
 }
 
 export async function updateContactAction(customerId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {

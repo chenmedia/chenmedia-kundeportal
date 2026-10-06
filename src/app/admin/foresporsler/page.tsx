@@ -4,7 +4,7 @@ import { requireAdmin } from "@/server/admin-auth";
 import { formatCalendarDate, formatDateTime } from "@/lib/format";
 import { STATUS_LABELS, STATUSES, InquirySnapshot } from "@/lib/inquiry";
 import { StatusBadge } from "@/components/AdminBits";
-import { DeleteByEmailForm } from "@/components/InquiryAdminForms";
+import { DeleteByEmailForm, HubspotSetupForm } from "@/components/InquiryAdminForms";
 import { hubspotConfigured } from "@/server/hubspot";
 import { emailBodyRetentionDays, inquiryRetentionMonths } from "@/server/retention";
 
@@ -90,6 +90,14 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
             </tbody>
           </table>
         </div>
+      )}
+
+      {hubspotConfigured() && (
+        <section className="card p-5 grid gap-3" aria-labelledby="hubspot-title">
+          <h2 id="hubspot-title" className="title text-lg">HubSpot</h2>
+          <p className="text-sm text-muted">Forespørsler overføres til HubSpot. Etter at tokenet er satt (eller scopes er endret) oppretter denne knappen egenskapene dealene trenger og sjekker pipeline og steg. Trygt å trykke flere ganger.</p>
+          <HubspotSetupForm />
+        </section>
       )}
 
       <section className="card p-5 grid gap-3" aria-labelledby="personvern-title">
