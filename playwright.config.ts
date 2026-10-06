@@ -24,6 +24,9 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     baseURL: `http://localhost:${PORT}`,
+    // Sporing og skjermbilde bare ved feil, slik at CI-artefaktene (test-results/) gir noe å feilsøke med.
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
   },
   webServer: {

@@ -59,6 +59,8 @@ npm run dev                 # http://localhost:3000
 | `APP_URL` | Offentlig adresse, brukes til å bygge kundelenker. Mangler den på Vercel i produksjon, brukes prosjektets produksjonsadresse (`VERCEL_PROJECT_PRODUCTION_URL`). |
 | `CRON_SECRET` | Minst 16 tegn. Vercel sender den som `Authorization: Bearer …` til `/api/cron/*`. Uten den avvises alle cron-kall, og feilede e-poster prøves ikke på nytt automatisk. Marker som *Sensitive*. |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Bildelagring i Supabase Storage (privat bucket, standard `kundeportal-media`). Service-nøkkelen brukes bare på serveren og må aldri eksponeres i nettleseren. |
+| `SUPABASE_PUBLISHABLE_KEY` (eller `SUPABASE_ANON_KEY`) | Offentlig nøkkel som trengs for administratorinnlogging via Supabase Auth. Mangler den, faller innloggingen tilbake til lokal passord-hash. |
+| `INQUIRY_RETENTION_MONTHS`, `EMAIL_BODY_RETENTION_DAYS` | Oppbevaringsfrister, se «Personvern og oppbevaring». Tomt = ingen automatisk sletting. |
 | `STORAGE_DIR` | Kun lokal utvikling uten Supabase. Virker ikke på Vercel. |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Brukes av seed / `admin:create`. Ingen hardkodet passord finnes. |
 | `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` | Aktiverer ekte e-post via Resend. Tomt = lokal utboks. |
@@ -144,10 +146,24 @@ npm run build       # produksjonsbygg
 CHROMIUM_PATH=/sti/til/chromium npx playwright test   # utelat CHROMIUM_PATH hvis `npx playwright install chromium` er kjørt
 ```
 
+## Personvern og oppbevaring
+
+Forespørsler inneholder kontaktperson, e-post, telefon og fritekst, og e-postjobbene gjentar de samme opplysningene.
+Appen sletter ingenting av seg selv før fristene er bestemt:
+
+| Variabel | Virkning |
+|---|---|
+| `INQUIRY_RETENTION_MONTHS` | Avsluttede forespørsler (status «Avsluttet») slettes når de ikke er endret på så mange måneder (1 til 120). Tomt = beholdes. Når satt, vises fristen i personvernteksten på kundesiden. |
+| `EMAIL_BODY_RETENTION_DAYS` | Innholdet i sendte e-poster tømmes (og kundens adresse fjernes fra kvitteringen) etter så mange dager. Tomt = beholdes. |
+| `CRON_SECRET` | Kreves for at den daglige opprydningen (`/api/cron/retention`, kl. 03:30 UTC, se `vercel.json`) skal kjøre. |
+
+Under **Forespørsler** i admin finnes «Slett alt fra en e-postadresse» (innsyn/sletting på forespørsel). Kontaktpersonen
+du selv har lagt inn på en kunde (`Customer.contact*`) slettes ikke automatisk, og kunder kan ikke slettes, bare deaktiveres.
+
 ## Kjente begrensninger (beta)
 
 - Én administratorrolle, ingen passordtilbakestilling (bruk `npm run admin:create`).
-- Kun ett eventbilde per kundeside. Opplastede filer fjernes ikke fra lagringen når de ikke lenger brukes.
+- Opplastede filer fjernes ikke fra lagringen når de ikke lenger brukes.
 - **Supabase Storage-integrasjonen er testet mot mockede svar, ikke mot et levende prosjekt.**
   Prøv bildeopplasting i et forhåndsvisningsmiljø før kunder får lenker.
 - Testene nullstiller databasene `*_test` og `*_e2e` og nekter å røre andre databaser.
@@ -167,7 +183,9 @@ Dette må avklares og verifiseres før kunder får lenker:
    verifisert bildeopplasting mot ekte Storage.
 3. **Sikkerhetskopi:** sjekk Supabase-planens backup/PITR for databasen. Storage-filer sikkerhetskopieres ikke automatisk.
 4. Ønsket tilgangsnivå: kundelenken er en delbar nøkkel. Alle med lenken ser prisene.
-5. Gjennomgang av personverntekst og eventuell slettefrist (ikke oppfunnet her).
+5. **Slettefrist:** bestem hvor lenge forespørsler skal lagres, og sett `INQUIRY_RETENTION_MONTHS` (og gjerne
+   `EMAIL_BODY_RETENTION_DAYS`) samt `CRON_SECRET`. Uten dem slettes ingenting automatisk (se «Personvern og oppbevaring»).
+   Gå også gjennom personverntekstens ordlyd.
 
 ## Arbeidsflyt
 

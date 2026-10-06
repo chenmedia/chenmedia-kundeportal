@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { STATUS_LABELS, STATUSES } from "@/lib/inquiry";
-import { deleteInquiryAction, updateInquiryAction, type ActionState } from "@/app/admin/actions";
+import { deleteByEmailAction, deleteInquiryAction, updateInquiryAction, type ActionState } from "@/app/admin/actions";
 
 export function StatusForm({ id, status, notes }: { id: string; status: string; notes: string }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(updateInquiryAction.bind(null, id), {});
@@ -38,6 +38,27 @@ export function DeleteForm({ id }: { id: string }) {
       </label>
       {state.error && <p role="alert" className="field-error !mt-0">{state.error}</p>}
       <button className="btn btn-outline btn-sm self-start !border-err !text-err hover:!bg-err hover:!text-white" disabled={pending}>Slett forespørsel</button>
+    </form>
+  );
+}
+
+/** Sletter alt fra én kontaktadresse, for eksempel når noen ber om at opplysningene deres slettes. */
+export function DeleteByEmailForm() {
+  const [state, action, pending] = useActionState<ActionState, FormData>(deleteByEmailAction, {});
+  return (
+    <form action={action} className="grid gap-4 max-w-xl">
+      <div>
+        <label htmlFor="del-email" className="field-label">E-postadresse</label>
+        <input id="del-email" name="email" type="email" className="input" defaultValue={state.values?.email ?? ""} autoComplete="off" aria-describedby="del-email-h" />
+        <p id="del-email-h" className="field-hint">Sletter alle forespørsler som er sendt inn med denne kontaktadressen (uavhengig av store/små bokstaver), med tilhørende e-postjobber. Kan ikke angres.</p>
+      </div>
+      <label className="check text-sm">
+        <input type="checkbox" name="confirm" />
+        <span>Jeg bekrefter at alt fra denne adressen skal slettes for godt.</span>
+      </label>
+      {state.error && <p role="alert" className="field-error !mt-0">{state.error}</p>}
+      {state.ok && <p role="status" className="text-sm font-semibold text-ok">{state.message}</p>}
+      <button className="btn btn-outline btn-sm self-start !border-err !text-err hover:!bg-err hover:!text-white" disabled={pending}>Slett alt fra adressen</button>
     </form>
   );
 }
