@@ -157,9 +157,15 @@ så og beskytter mot utdaterte versjoner. Etter innsending overføres forespørs
 3. Det opprettes en deal i «Sales Pipeline» på steget «PRESENTATION - OPPORTUNITY IDENTIFIED», koblet til kontakten (på
    e-post) og selskapet, med:
    - navn `SELSKAP // ARRANGEMENT - EVENTPHOTO - DD/MM/ÅÅÅÅ` (EVENTFILM hvis pakken nevner film/video, «dato ikke avklart» uten dato)
-   - closedate = siste dag i inneværende måned (norsk tid), prioritet «Medium»
-   - deal type «Existing Business» hvis selskapet har en vunnet deal i HubSpot fra før, ellers «New Business»
-   - beløp bare for fastpris-pakker (skjemaet har ikke et budsjettfelt), pluss pakke, avtaleversjon, dato, sted og lenke tilbake til admin
+   - closedate = siste dag i inneværende måned (norsk tid)
+   - beløp = pakkeprisen. Ved «fra»-pris er det minstebeløpet, og det merkes i egenskapen «Kundeportal: pristype»
+     («Fra-pris (minstebeløp, ikke endelig)») og i beskrivelsen. «Usikker / annet behov» gir ingen verdi.
+   - deal type «Existing Business» hvis selskapet har minst én vunnet deal i HubSpot fra før, ellers «New Business»
+   - prioritet beregnes automatisk (`src/lib/crm.ts`, terskler øverst i filen) og begrunnes i beskrivelsen. Poeng for
+     budsjett (≥ 30 000 kr: +2, ≥ 10 000 kr: +1, lavere: −1, ukjent: 0) og for kunden (≥ 3 vunne deals eller LTV ≥ 100 000 kr: +2,
+     minst én vunnet deal: +1). Sum ≥ 3 = høy, ≤ −1 = lav, ellers middels. LTV er samlet beløp på selskapets vunne deals
+     (leser inntil 100) og regnes ut fra HubSpot ved hver forespørsel, så det følger med når du markerer deals som vunnet
+   - pakke, avtaleversjon, dato, sted og lenke tilbake til admin
 4. Er `HUBSPOT_OWNER_ID` satt, eier den personen dealen og får en oppgave. HubSpot varsler da etter egne
    varslingsinnstillinger (sjekk *Innstillinger → Varsler* for deal- og oppgavetildeling). Teamvarselet på e-post
    sendes da ikke fra portalen; kvitteringen til kunden sendes som før.

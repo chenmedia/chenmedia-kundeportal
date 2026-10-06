@@ -12,6 +12,7 @@ export const PROPERTIES: Prop[] = [
   { name: "kundeportal_referanse", label: "Kundeportal: referanse", type: "string", fieldType: "text", unique: true, description: "Referansen fra kundeportalen. Brukes til å unngå duplikater." },
   { name: "kundeportal_lenke", label: "Kundeportal: lenke til forespørsel", type: "string", fieldType: "text", description: "Lenke til forespørselen i kundeportalens admin." },
   { name: "kundeportal_pakke", label: "Kundeportal: pakke", type: "string", fieldType: "text", description: "Pakken kunden valgte." },
+  { name: "kundeportal_pristype", label: "Kundeportal: pristype", type: "string", fieldType: "text", description: "Om beløpet er en fastpris eller en fra-pris (minstebeløp)." },
   { name: "kundeportal_avtale", label: "Kundeportal: avtaleversjon", type: "string", fieldType: "text", description: "Avtale og versjon kunden så prisene i." },
   { name: "arrangementsdato", label: "Arrangementsdato", type: "date", fieldType: "date", description: "Dato for arrangementet, hvis avklart." },
   { name: "arrangementssted", label: "Arrangementssted", type: "string", fieldType: "text", description: "Sted for arrangementet, hvis avklart." },

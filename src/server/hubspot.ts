@@ -2,6 +2,7 @@ import { db } from "./db";
 import { appUrl } from "./app-url";
 import { logError } from "./log";
 import { formatCalendarDate, formatPackagePrice, todayInOslo } from "@/lib/format";
+import { dealPriority } from "@/lib/crm";
 import type { InquirySnapshot } from "@/lib/inquiry";
 import type { Customer, Inquiry } from "@prisma/client";
 
@@ -118,7 +119,7 @@ async function associate(from: string, fromId: string, to: string, toId: string)
   await hs("PUT", `/crm/v4/objects/${from}/${fromId}/associations/default/${to}/${toId}`);
 }
 
-function dealDescription(i: Inquiry, s: InquirySnapshot): string {
+function dealDescription(i: Inquiry, s: InquirySnapshot, priorityNote: string): string {
   const pkg = s.package;
   const price = pkg ? formatPackagePrice(pkg) : null;
   return [
@@ -130,11 +131,14 @@ function dealDescription(i: Inquiry, s: InquirySnapshot): string {
     i.timeframe ? `Ønsket tidsrom: ${i.timeframe}` : null,
     i.express ? "Ønsker levering innen 24 timer" : null,
     i.printUse ? "Ønsker å avklare bruk av bilder i trykk" : null,
+    `Prioritet satt automatisk: ${priorityNote}`,
     "",
     "Beskrivelse:",
     i.description,
   ].filter((l): l is string => l !== null).join("\n");
 }
+
+const PRIORITY_LABEL = { low: "lav", medium: "middels", high: "høy" } as const;
 
 /** «SELSKAP // ARRANGEMENT - EVENTPHOTO eller EVENTFILM - DATO». Dato som dd/mm/åååå, eller «dato ikke avklart». */
 export function dealName(i: Pick<Inquiry, "eventName" | "eventDate" | "dateUnknown">, s: InquirySnapshot): string {
@@ -149,16 +153,21 @@ export function endOfMonthCloseDate(now: Date = new Date()): string {
   return new Date(Date.UTC(y, m, 0)).toISOString();
 }
 
-/** Eksisterende kunde = selskapet har vunnet minst én deal i HubSpot fra før. Ellers ny kunde. */
-async function dealType(companyId: string): Promise<"newbusiness" | "existingbusiness"> {
+/**
+ * Kundehistorikk fra HubSpot: antall vunne deals og samlet beløp (LTV) hos selskapet. Eksisterende kunde = minst én vunnet deal.
+ * Leser inntil 100 vunne deals, som er mer enn nok til å avgjøre prioritet.
+ */
+async function companyHistory(companyId: string): Promise<{ wonCount: number; ltvKr: number }> {
   const r = await hs("POST", "/crm/v3/objects/deals/search", {
     filterGroups: [{ filters: [
       { propertyName: "associations.company", operator: "EQ", value: companyId },
       { propertyName: "hs_is_closed_won", operator: "EQ", value: "true" },
     ] }],
-    properties: ["dealname"], limit: 1,
+    properties: ["amount"], limit: 100,
   });
-  return firstId(r) ? "existingbusiness" : "newbusiness";
+  const results = (r?.results as { properties?: { amount?: string | null } }[] | undefined) ?? [];
+  const ltvKr = results.reduce((sum, d) => sum + (Number(d.properties?.amount) || 0), 0);
+  return { wonCount: results.length, ltvKr };
 }
 
 async function ensureDeal(i: Inquiry, s: InquirySnapshot, companyId: string): Promise<string> {
@@ -169,18 +178,22 @@ async function ensureDeal(i: Inquiry, s: InquirySnapshot, companyId: string): Pr
   if (existing) return existing;
   const pkg = s.package;
   const owner = process.env.HUBSPOT_OWNER_ID;
+  // Beløp: pakkeprisen. Ved «fra»-pris er det minstebeløpet, og det merkes i egenskapen «Kundeportal: pristype» og i beskrivelsen.
+  const amountKr = pkg && pkg.priceOre !== null ? pkg.priceOre / 100 : null;
+  const history = await companyHistory(companyId);
+  const prio = dealPriority({ amountKr, ...history });
   const r = await hs("POST", "/crm/v3/objects/deals", {
     properties: {
       dealname: dealName(i, s),
       pipeline: hubspotPipelineId(),
       dealstage: hubspotStageId(),
       closedate: endOfMonthCloseDate(),
-      dealtype: await dealType(companyId),
-      hs_priority: "medium",
+      dealtype: history.wonCount > 0 ? "existingbusiness" : "newbusiness",
+      hs_priority: prio.priority,
       ...(owner ? { hubspot_owner_id: owner } : {}),
-      // «Fra»-priser er en nedre grense, ikke et beløp: bare fastpris settes som dealbeløp.
-      ...(pkg && pkg.priceType === "fixed" && pkg.priceOre !== null ? { amount: String(pkg.priceOre / 100) } : {}),
-      description: dealDescription(i, s),
+      ...(amountKr !== null ? { amount: String(amountKr) } : {}),
+      ...(pkg ? { kundeportal_pristype: pkg.priceType === "from" ? "Fra-pris (minstebeløp, ikke endelig)" : "Fastpris" } : {}),
+      description: dealDescription(i, s, `${PRIORITY_LABEL[prio.priority]} (${prio.reason})`),
       kundeportal_referanse: i.reference,
       kundeportal_lenke: `${appUrl()}/admin/foresporsler/${i.id}`,
       kundeportal_pakke: pkg?.name ?? "Usikker / annet behov",

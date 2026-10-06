@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { submitInquiry, deleteInquiriesByEmail } from "@/server/inquiries";
 import { processCrmSync, retryOutstandingCrmSyncs, hubspotDealUrl, dealName, endOfMonthCloseDate } from "@/server/hubspot";
 import type { InquirySnapshot } from "@/lib/inquiry";
+import { dealPriority } from "@/lib/crm";
 import { ensureHubspotSetup, PROPERTIES } from "@/server/hubspot-setup";
 import { makePublished, validInput } from "./helpers";
 
@@ -42,7 +43,7 @@ function fakeHubspot() {
     if (path === "/crm/v3/objects/deals/search") {
       const f = body.filterGroups[0].filters;
       // Eksisterende kunde: vunnet deal på selskapet.
-      if (f[0].propertyName === "associations.company") return json({ results: s.deals.filter((d) => d.wonCompany === f[0].value).slice(0, 1).map((d) => ({ id: d.id })) });
+      if (f[0].propertyName === "associations.company") return json({ results: s.deals.filter((d) => d.wonCompany === f[0].value).map((d) => ({ id: d.id, properties: { amount: d.amount ?? null } })) });
       return json({ results: find(s.deals, "kundeportal_referanse", f[0].value) });
     }
     if (path === "/crm/v3/objects/contacts" && method === "POST") { const r = { id: id(), ...body.properties }; s.contacts.push(r); return json({ id: r.id }, 201); }
@@ -130,7 +131,7 @@ describe("HubSpot: overføring", () => {
     await processCrmSync(r.inquiryId);
     const d = hs.deals[0];
     expect(d.dealname).toBe("Fotofest AS // Sommerfest - EVENTPHOTO - 15/06/2099");
-    expect(d).toMatchObject({ pipeline: "default", dealstage: "appointmentscheduled", hs_priority: "medium", dealtype: "newbusiness", hubspot_owner_id: "555" });
+    expect(d).toMatchObject({ pipeline: "default", dealstage: "appointmentscheduled", hs_priority: "low", dealtype: "newbusiness", hubspot_owner_id: "555" });
     expect(d.closedate).toBe(endOfMonthCloseDate());
     expect(new Date(d.closedate).getTime()).toBeGreaterThan(Date.now() - 86400_000);
     expect(hs.assoc.some((a) => a.startsWith("deals/") && a.includes("/associations/default/contacts/"))).toBe(true);
@@ -144,6 +145,27 @@ describe("HubSpot: overføring", () => {
     const { r } = await submit("Gammel Kunde AS");
     await processCrmSync(r.inquiryId);
     expect(hs.deals.find((d) => d.id !== "won1")!.dealtype).toBe("existingbusiness");
+  });
+
+  it("fra-pris gir beløp merket som minstebeløp, og stor eksisterende kunde gir høy prioritet", async () => {
+    enableHubspot();
+    const hs = fakeHubspot();
+    hs.companies.push({ id: "co7", name: "Stor Kunde AS" });
+    hs.deals.push({ id: "w1", wonCompany: "co7", amount: "60000" }, { id: "w2", wonCompany: "co7", amount: "50000" });
+    const { r } = await submit("Stor Kunde AS", { packageId: "pkg_stort" });
+    await processCrmSync(r.inquiryId);
+    const d = hs.deals.find((x) => x.kundeportal_referanse)!;
+    expect(d).toMatchObject({ amount: "16000", kundeportal_pristype: "Fra-pris (minstebeløp, ikke endelig)", dealtype: "existingbusiness", hs_priority: "high" });
+    expect(d.description).toContain("Prioritet satt automatisk: høy");
+    expect(d.description).toContain("2 vunne deals");
+  });
+
+  it("fastpris merkes som fastpris", async () => {
+    enableHubspot();
+    const hs = fakeHubspot();
+    const { r } = await submit("Fast Pris AS", { packageId: "pkg_medium" });
+    await processCrmSync(r.inquiryId);
+    expect(hs.deals[0]).toMatchObject({ amount: "10000", kundeportal_pristype: "Fastpris", hs_priority: "medium" });
   });
 
   it("bruker EVENTFILM for filmpakker og «dato ikke avklart» uten dato", () => {
@@ -348,5 +370,28 @@ describe("HubSpot: oppsett og lenker", () => {
     expect(hubspotDealUrl("42")).toBeNull();
     vi.stubEnv("HUBSPOT_PORTAL_ID", "3060835");
     expect(hubspotDealUrl("42")).toBe("https://app-eu1.hubspot.com/contacts/3060835/record/0-3/42");
+  });
+});
+
+describe("prioritet", () => {
+  const p = (amountKr: number | null, wonCount = 0, ltvKr = 0) => dealPriority({ amountKr, wonCount, ltvKr }).priority;
+  it("ny kunde: etter budsjettets størrelse, og ukjent budsjett er middels", () => {
+    expect(p(null)).toBe("medium");
+    expect(p(6_000)).toBe("low");
+    expect(p(10_000)).toBe("medium");
+    expect(p(9_999)).toBe("low");
+    expect(p(80_000)).toBe("medium");
+  });
+  it("eksisterende kunde løfter prioriteten, og LTV eller mange oppdrag teller ekstra", () => {
+    expect(p(6_000, 1, 8_000)).toBe("medium");
+    expect(p(50_000, 1, 10_000)).toBe("high");
+    expect(p(null, 3, 30_000)).toBe("medium");
+    expect(p(15_000, 3, 30_000)).toBe("high");
+    expect(p(15_000, 1, 120_000)).toBe("high"); // høy LTV selv med få oppdrag
+    expect(p(6_000, 5, 200_000)).toBe("medium");
+  });
+  it("begrunnelsen nevner budsjett og kundehistorikk", () => {
+    expect(dealPriority({ amountKr: 50_000, wonCount: 0, ltvKr: 0 }).reason).toMatch(/budsjett fra .*50.*kr, ny kunde/);
+    expect(dealPriority({ amountKr: null, wonCount: 2, ltvKr: 90_000 }).reason).toMatch(/budsjett ukjent, 2 vunne deals, LTV/);
   });
 });
