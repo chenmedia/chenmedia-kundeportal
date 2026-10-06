@@ -9,7 +9,7 @@ import type { Customer, Inquiry } from "@prisma/client";
  * Overføring av forespørsler til HubSpot (adapter mot ekstern tjeneste, som email.ts).
  *
  * Portalen eier skjemaet og prisøyeblikksbildet. Etter innsending finner eller oppretter vi kontakt og selskap i HubSpot,
- * oppretter en deal i egen pipeline og en oppgave til eieren (som gir varsel fra HubSpot). Deretter følges forespørselen
+ * oppretter en deal i salgspipelinen (steg «Opportunity identified») og en oppgave til eieren (som gir varsel fra HubSpot). Deretter følges forespørselen
  * opp i HubSpot, der status flyttes manuelt.
  *
  * Hvert steg lagres på CrmSync-raden (bare ID-er), så en feil midt i kan prøves på nytt uten duplikater: deals finnes
@@ -26,8 +26,15 @@ const MAX_AUTO_AGE_MS = 7 * 24 * 3600_000;
 // HubSpot-definerte standardassosiasjoner (typeId): kontakt→selskap, deal→kontakt, deal→selskap, oppgave→deal.
 const ASSOC = { dealToContact: 3, dealToCompany: 5, taskToDeal: 216 } as const;
 
+/** Standard «Sales Pipeline» og steget «PRESENTATION - OPPORTUNITY IDENTIFIED» (HubSpots faste ID-er). Kan overstyres med miljøvariabler. */
+const DEFAULT_PIPELINE = "default";
+const DEFAULT_STAGE = "appointmentscheduled";
+export const hubspotPipelineId = () => process.env.HUBSPOT_PIPELINE_ID || DEFAULT_PIPELINE;
+export const hubspotStageId = () => process.env.HUBSPOT_STAGE_NEW || DEFAULT_STAGE;
+
+/** Integrasjonen er på så snart tilgangstokenet er satt. */
 export function hubspotConfigured(): boolean {
-  return !!(process.env.HUBSPOT_ACCESS_TOKEN && process.env.HUBSPOT_PIPELINE_ID && process.env.HUBSPOT_STAGE_NEW);
+  return !!process.env.HUBSPOT_ACCESS_TOKEN;
 }
 
 /** Lenke til dealen i HubSpot (krever HUBSPOT_PORTAL_ID). Standard datasenter er EU1, som kontoen bruker. */
@@ -140,8 +147,8 @@ async function ensureDeal(i: Inquiry, s: InquirySnapshot): Promise<string> {
   const r = await hs("POST", "/crm/v3/objects/deals", {
     properties: {
       dealname: `${i.eventName} – ${s.customerName}`.slice(0, 250),
-      pipeline: process.env.HUBSPOT_PIPELINE_ID,
-      dealstage: process.env.HUBSPOT_STAGE_NEW,
+      pipeline: hubspotPipelineId(),
+      dealstage: hubspotStageId(),
       ...(owner ? { hubspot_owner_id: owner } : {}),
       // «Fra»-priser er en nedre grense, ikke et beløp: bare fastpris settes som dealbeløp.
       ...(pkg && pkg.priceType === "fixed" && pkg.priceOre !== null ? { amount: String(pkg.priceOre / 100) } : {}),

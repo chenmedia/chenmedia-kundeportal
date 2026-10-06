@@ -14,7 +14,7 @@ function fakeHubspot() {
     companies: [] as (Rec & { id: string })[],
     deals: [] as (Rec & { id: string })[],
     tasks: [] as { id: string; properties: Rec; associations: unknown }[],
-    pipelines: [] as { id: string; label: string; stages: { id: string; label: string; displayOrder: number }[] }[],
+    pipelines: [{ id: "default", label: "Sales Pipeline", stages: [{ id: "appointmentscheduled", label: "PRESENTATION - OPPORTUNITY IDENTIFIED" }, { id: "closedwon", label: "Won" }] }],
     props: [] as { name: string }[],
     assoc: [] as string[],
     deleted: [] as string[],
@@ -47,10 +47,6 @@ function fakeHubspot() {
     if (method === "DELETE" && path.startsWith("/crm/v3/objects/deals/")) { s.deleted.push(path.split("/").pop()!); return json(null, 204); }
     if (path === "/crm/v3/objects/contacts/gdpr-delete") { s.gdpr.push(body); return json(null, 204); }
     if (path === "/crm/v3/pipelines/deals" && method === "GET") return json({ results: s.pipelines });
-    if (path === "/crm/v3/pipelines/deals" && method === "POST") {
-      const p = { id: "pipe1", label: body.label, stages: body.stages.map((st: { label: string; displayOrder: number }, i: number) => ({ id: `stage${i}`, label: st.label, displayOrder: st.displayOrder })) };
-      s.pipelines.push(p); return json(p, 201);
-    }
     if (path === "/crm/v3/properties/deals" && method === "GET") return json({ results: s.props });
     if (path === "/crm/v3/properties/deals" && method === "POST") { s.props.push({ name: body.name }); return json({}, 201); }
     return json({ message: "ukjent" }, 404);
@@ -61,8 +57,6 @@ function fakeHubspot() {
 
 function enableHubspot(owner = true) {
   vi.stubEnv("HUBSPOT_ACCESS_TOKEN", "pat-test-token");
-  vi.stubEnv("HUBSPOT_PIPELINE_ID", "pipe1");
-  vi.stubEnv("HUBSPOT_STAGE_NEW", "stage0");
   vi.stubEnv("HUBSPOT_OWNER_ID", owner ? "555" : "");
 }
 
@@ -105,7 +99,7 @@ describe("HubSpot: overføring", () => {
     expect(hs.companies.map((c) => c.name)).toEqual(["Ny Kunde AS"]);
     expect(hs.deals).toHaveLength(1);
     const deal = hs.deals[0];
-    expect(deal).toMatchObject({ pipeline: "pipe1", dealstage: "stage0", hubspot_owner_id: "555", kundeportal_referanse: r.reference, amount: "6000" });
+    expect(deal).toMatchObject({ pipeline: "default", dealstage: "appointmentscheduled", hubspot_owner_id: "555", kundeportal_referanse: r.reference, amount: "6000" });
     expect(deal.dealname).toContain("Ny Kunde AS");
     expect(deal.kundeportal_lenke).toBe(`http://localhost:3000/admin/foresporsler/${r.inquiryId}`);
     // Kontaktopplysninger ligger bare på kontakten, ikke i dealbeskrivelsen.
@@ -290,18 +284,23 @@ describe("HubSpot: sletting på e-postadresse", () => {
 });
 
 describe("HubSpot: oppsett og lenker", () => {
-  it("oppretter pipeline og egenskaper, og er idempotent", async () => {
+  it("oppretter egenskapene, er idempotent og sjekker pipeline og steg", async () => {
     vi.stubEnv("HUBSPOT_ACCESS_TOKEN", "pat-test-token");
     const hs = fakeHubspot();
     const first = await ensureHubspotSetup();
-    expect(first).toMatchObject({ pipelineId: "pipe1", stageNewId: "stage0" });
-    expect(first.created).toHaveLength(1 + PROPERTIES.length);
-    expect(hs.pipelines[0].stages.map((st) => st.label)).toEqual(["Ny forespørsel", "Avklarer", "Tilbud sendt", "Booket", "Tapt"]);
+    expect(first).toMatchObject({ pipelineId: "default", stageId: "appointmentscheduled" });
+    expect(first.created).toHaveLength(PROPERTIES.length);
     const second = await ensureHubspotSetup();
     expect(second.created).toEqual([]);
-    expect(second).toMatchObject({ pipelineId: "pipe1", stageNewId: "stage0" });
-    expect(hs.pipelines).toHaveLength(1);
     expect(hs.props).toHaveLength(PROPERTIES.length);
+    expect(hs.calls.filter((c) => c.startsWith("POST /crm/v3/pipelines"))).toEqual([]);
+  });
+
+  it("gir tydelig feil når steget ikke finnes", async () => {
+    vi.stubEnv("HUBSPOT_ACCESS_TOKEN", "pat-test-token");
+    vi.stubEnv("HUBSPOT_STAGE_NEW", "finnes_ikke");
+    fakeHubspot();
+    await expect(ensureHubspotSetup()).rejects.toThrow(/finnes_ikke/);
   });
 
   it("lenke til deal krever portal-ID og bruker EU-domenet som standard", () => {

@@ -154,7 +154,7 @@ så og beskytter mot utdaterte versjoner. Etter innsending overføres forespørs
 
 1. Kontakten finnes på e-post, ellers opprettes den. Eksisterende kontakter endres aldri.
 2. Selskapet finnes på kundenavn (oldest first), ellers opprettes det. ID-en bufres på kunden.
-3. Det opprettes en deal i pipelinen «Forespørsler» (steg «Ny forespørsel»), koblet til kontakt og selskap, med
+3. Det opprettes en deal i «Sales Pipeline» på steget «PRESENTATION - OPPORTUNITY IDENTIFIED», koblet til kontakt og selskap, med
    pakke, avtaleversjon, dato, sted og lenke tilbake til admin. Beløp settes bare for fastpris.
 4. Er `HUBSPOT_OWNER_ID` satt, eier den personen dealen og får en oppgave. HubSpot varsler da etter egne
    varslingsinnstillinger (sjekk *Innstillinger → Varsler* for deal- og oppgavetildeling). Teamvarselet på e-post
@@ -166,13 +166,14 @@ Status flyttes manuelt i HubSpot. Feil lagres per forespørsel (`CrmSync`), vise
 **Oppsett**
 
 1. Opprett en Private App i HubSpot med scopes: `crm.objects.contacts.read/write`, `crm.objects.companies.read/write`,
-   `crm.objects.deals.read/write`, `crm.objects.owners.read` og `crm.schemas.deals.read/write` (pipeline og egenskaper).
+   `crm.objects.deals.read/write`, `crm.objects.owners.read` og `crm.schemas.deals.read/write` (egenskaper).
    Oppgaver opprettes med kontakt-/dealscopene. Gir oppgaveopprettelse 403 («failed» med feilkode `http_403` i admin),
    legg til scope for oppgaver/engasjementer. Rettighetene er ikke testet mot den faktiske kontoen.
-2. Kjør `HUBSPOT_ACCESS_TOKEN=... npm run hubspot:setup` (eller legg token i `.env`). Skriptet oppretter pipelinen og
-   dealegenskapene (trygt å kjøre flere ganger) og skriver ut `HUBSPOT_PIPELINE_ID` og `HUBSPOT_STAGE_NEW`.
-3. Sett `HUBSPOT_ACCESS_TOKEN` (Sensitive), `HUBSPOT_PIPELINE_ID`, `HUBSPOT_STAGE_NEW`, `HUBSPOT_OWNER_ID` og
-   `HUBSPOT_PORTAL_ID` i Vercel og redeploy. Uten de tre første er integrasjonen helt av.
+2. Kjør `HUBSPOT_ACCESS_TOKEN=... npm run hubspot:setup` (eller legg token i `.env`). Skriptet oppretter dealegenskapene
+   (trygt å kjøre flere ganger) og sjekker at pipelinen og steget finnes.
+3. Sett `HUBSPOT_ACCESS_TOKEN` (Sensitive), `HUBSPOT_OWNER_ID` og `HUBSPOT_PORTAL_ID` i Vercel og redeploy. Integrasjonen er
+   på så snart tokenet er satt. Pipeline og steg er som standard `default` og `appointmentscheduled`; andre pipelines
+   velges med `HUBSPOT_PIPELINE_ID` og `HUBSPOT_STAGE_NEW`.
 4. Migrasjon `0005_crm_sync` må være kjørt mot Supabase først.
 
 **Personvern.** Personopplysninger sendes bare til kontakten i HubSpot; dealbeskrivelsen inneholder ikke kontaktdata.

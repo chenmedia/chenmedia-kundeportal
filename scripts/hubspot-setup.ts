@@ -6,10 +6,8 @@ async function main() {
     process.exit(1);
   }
   const r = await ensureHubspotSetup();
-  console.log(r.created.length ? `Opprettet: ${r.created.join(", ")}` : "Alt var allerede satt opp.");
-  console.log("\nLegg disse inn som miljøvariabler (Vercel):");
-  console.log(`HUBSPOT_PIPELINE_ID=${r.pipelineId}`);
-  console.log(`HUBSPOT_STAGE_NEW=${r.stageNewId}`);
+  console.log(r.created.length ? `Opprettet: ${r.created.join(", ")}` : "Alle egenskapene fantes fra før.");
+  console.log(`Nye forespørsler havner i «${r.pipelineLabel}», steget «${r.stageLabel}».`);
 }
 
 main().catch((e) => {
