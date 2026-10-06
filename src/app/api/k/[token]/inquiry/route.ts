@@ -5,6 +5,7 @@ import { submitInquiry } from "@/server/inquiries";
 import { allow, clientIp } from "@/server/rate-limit";
 import { sameOrigin } from "@/server/admin-auth";
 import { sha256 } from "@/server/crypto";
+import { resolvePublished } from "@/server/customers";
 import { logError } from "@/server/log";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (raw.length > 30_000) return NextResponse.json({ ok: false, error: "too_large" }, { status: 413 });
   let body: unknown;
   try { body = JSON.parse(raw); } catch { return NextResponse.json({ ok: false, error: "bad_json" }, { status: 400 }); }
+
+  // Ukjent, deaktivert eller upublisert lenke gir samme 404 som siden, og skriver ingenting i rate-limit-tabellen
+  // (ellers kunne tilfeldige tokens fylle den).
+  if (!(await resolvePublished(token))) return NextResponse.json({ ok: false, error: "unavailable" }, { status: 404 });
 
   const ip = clientIp(req.headers);
   if (!(await allow(`inq:${ip}:${sha256(token).slice(0, 16)}`, 10, 10 * 60))) {

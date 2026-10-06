@@ -112,9 +112,16 @@ export function canonical(content: Content): string {
   return JSON.stringify(contentSchema.parse(content));
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Tegn som aldri hører hjemme i en adresse vi sender til eller lenker til: ? & = # % gir parametre i mailto-lenker
+// («a@b.no?bcc=x@y.no»), og < > ( ) , ; : " \\ / gir flere mottakere eller visningsnavn.
+const EMAIL_RE = /^[^\s@<>(),;:\\"?&=#%\p{Cc}]+@[^\s@<>(),;:\\"?&=#%/\p{Cc}]+\.[^\s@<>(),;:\\"?&=#%/\p{Cc}]+$/u;
 export function isEmail(v: string): boolean {
   return EMAIL_RE.test(v) && v.length <= 254;
+}
+
+/** mailto-lenke som aldri kan bære ekstra parametre (bcc, body), selv om adressen ikke er validert. */
+export function mailtoHref(address: string): string {
+  return `mailto:${encodeURIComponent(address).replace(/%40/g, "@")}`;
 }
 
 /** Krav for publisering. Returnerer feilmeldinger (tom liste = OK). */

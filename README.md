@@ -56,7 +56,8 @@ npm run dev                 # http://localhost:3000
 | `DATABASE_URL` | Postgres. I drift: Supabase **pooler**-adressen (port 6543) med `?pgbouncer=true&connection_limit=1`. |
 | `DIRECT_URL` | Direkte Postgres-adresse (port 5432). Brukes til migrasjoner. |
 | `APP_SECRET` | Krypterer kundelenker som lagres for «Kopier lenke». **Påkrevd i produksjon** (min. 16 tegn). Byttes den, kan gamle lenker ikke vises (generer ny lenke). |
-| `APP_URL` | Offentlig adresse, brukes til å bygge kundelenker. |
+| `APP_URL` | Offentlig adresse, brukes til å bygge kundelenker. Mangler den på Vercel i produksjon, brukes prosjektets produksjonsadresse (`VERCEL_PROJECT_PRODUCTION_URL`). |
+| `CRON_SECRET` | Minst 16 tegn. Vercel sender den som `Authorization: Bearer …` til `/api/cron/*`. Uten den avvises alle cron-kall, og feilede e-poster prøves ikke på nytt automatisk. Marker som *Sensitive*. |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Bildelagring i Supabase Storage (privat bucket, standard `kundeportal-media`). Service-nøkkelen brukes bare på serveren og må aldri eksponeres i nettleseren. |
 | `STORAGE_DIR` | Kun lokal utvikling uten Supabase. Virker ikke på Vercel. |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Brukes av seed / `admin:create`. Ingen hardkodet passord finnes. |
@@ -118,8 +119,12 @@ filer. Kunder får bildet via en tilgangskontrollert rute som videresender til e
   mens administrasjonen er åpen i en nettleser. Nye forespørsler vises også øverst på kundeoversikten.
 - **E-post:** utskiftbar leverandøradapter (`src/server/email.ts`, Resend støttes). Uten leverandør
   havner e-postene i **E-postutboksen** (`/admin/utboks`, kun innlogget), merket
-  «Lokal forhåndsvisning – ikke sendt». Feilede utsendinger kan prøves på nytt fra forespørselen.
-  Kundens adresse er *Reply-To*, aldri avsender.
+  «Lokal forhåndsvisning – ikke sendt». Feilede utsendinger kan prøves på nytt fra forespørselen, og en
+  daglig cron (`/api/cron/email-retry`, se `vercel.json`) prøver feilede jobber på nytt (opptil fem forsøk
+  i tre døgn). Hver utsending har tidsavbrudd (8 s) og idempotensnøkkel mot Resend, og en jobb tas atomisk
+  slik at samme e-post ikke sendes to ganger. Antall feilede e-poster vises som rødt merke i menyen.
+  Kundens adresse er *Reply-To*, aldri avsender. Kvittering til kunden sendes maks tre ganger i døgnet per
+  adresse (teamet varsles uansett), slik at skjemaet ikke kan brukes til å sende tekst til vilkårlige adresser.
 - **Tilgang:** tokens er 32 tilfeldige byte, lagres som SHA-256-hash (pluss kryptert kopi til
   «Kopier lenke»). Ugyldig, deaktivert og upublisert lenke gir samme nøytrale 404-side. Bilder serveres
   bare via tilgangskontrollerte ruter, og en kundelenke får bare bilder fra egen publiserte versjon.

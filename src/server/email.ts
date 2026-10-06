@@ -62,10 +62,22 @@ export function buildEmails(inq: EmailInquiry, s: InquirySnapshot, notifyTo: str
   ];
 }
 
-async function sendViaResend(d: { recipient: string; replyTo: string | null; subject: string; body: string }) {
+const SEND_TIMEOUT_MS = 8000;
+/** En jobb som står som «sending» lenger enn dette regnes som forlatt (funksjonen døde midt i utsendingen). */
+const SENDING_STALE_MS = 2 * 60_000;
+/** Antall forsøk den automatiske sveipen gir en jobb, og hvor gamle jobber den rører. */
+const MAX_AUTO_ATTEMPTS = 5;
+const MAX_AUTO_AGE_MS = 3 * 24 * 3600_000;
+
+async function sendViaResend(d: { id: string; recipient: string; replyTo: string | null; subject: string; body: string }) {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+      // Samme jobb gir aldri to e-poster, selv om utsendingen gjentas etter et avbrudd (Resend husker nøkkelen i 24 timer).
+      "Idempotency-Key": `emailjob-${d.id}`,
+    },
     body: JSON.stringify({
       from: process.env.EMAIL_FROM,
       to: [d.recipient],
@@ -73,6 +85,7 @@ async function sendViaResend(d: { recipient: string; replyTo: string | null; sub
       subject: d.subject,
       text: d.body,
     }),
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`http_${res.status}`);
 }
@@ -85,6 +98,18 @@ export async function processJob(jobId: string): Promise<void> {
     await db.emailJob.update({ where: { id: jobId }, data: { status: "local_preview", lastAttemptAt: new Date() } });
     return;
   }
+  // Ta jobben atomisk: bare én utsending om gangen (kunde-forespørsel, «prøv igjen» og cron kan overlappe).
+  const claimed = await db.emailJob.updateMany({
+    where: {
+      id: jobId,
+      OR: [
+        { status: { in: ["pending", "failed", "local_preview"] } },
+        { status: "sending", lastAttemptAt: { lt: new Date(Date.now() - SENDING_STALE_MS) } },
+      ],
+    },
+    data: { status: "sending", lastAttemptAt: new Date() },
+  });
+  if (claimed.count === 0) return;
   try {
     await sendViaResend(job);
     await db.emailJob.update({
@@ -93,7 +118,7 @@ export async function processJob(jobId: string): Promise<void> {
     });
   } catch (e) {
     logError("email.send", e, { jobId });
-    const cat = e instanceof Error && /^http_\d+$/.test(e.message) ? e.message : "network_error";
+    const cat = e instanceof Error && /^http_\d+$/.test(e.message) ? e.message : e instanceof Error && e.name === "TimeoutError" ? "timeout" : "network_error";
     await db.emailJob.update({
       where: { id: jobId },
       data: { status: "failed", attempts: { increment: 1 }, lastAttemptAt: new Date(), errorCategory: cat },
@@ -106,3 +131,26 @@ export async function processInquiryJobs(inquiryId: string) {
   for (const j of jobs) await processJob(j.id);
 }
 
+/**
+ * Daglig sveip (cron): prøver feilede og forlatte jobber på nytt, så en forespørsel ikke går tapt når e-postleverandøren
+ * var nede i øyeblikket kunden sendte. Gir opp etter fem forsøk eller tre døgn (da ligger jobben som «Feilet» i admin).
+ */
+export async function retryOutstandingJobs(limit = 25): Promise<number> {
+  if (!emailConfigured()) return 0;
+  const now = Date.now();
+  const jobs = await db.emailJob.findMany({
+    where: {
+      attempts: { lt: MAX_AUTO_ATTEMPTS },
+      createdAt: { gt: new Date(now - MAX_AUTO_AGE_MS) },
+      OR: [
+        { status: { in: ["pending", "failed"] } },
+        { status: "sending", lastAttemptAt: { lt: new Date(now - SENDING_STALE_MS) } },
+      ],
+    },
+    orderBy: { createdAt: "asc" },
+    take: limit,
+    select: { id: true },
+  });
+  for (const j of jobs) await processJob(j.id);
+  return jobs.length;
+}

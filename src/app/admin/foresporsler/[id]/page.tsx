@@ -7,6 +7,7 @@ import { InquirySnapshot } from "@/lib/inquiry";
 import { StatusBadge, EMAIL_STATUS } from "@/components/AdminBits";
 import { DeleteForm, StatusForm } from "@/components/InquiryAdminForms";
 import { retryEmailAction } from "../../actions";
+import { mailtoHref } from "@/lib/content";
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (<><dt className="eyebrow pt-1">{k}</dt><dd className="min-w-0 break-words">{children}</dd></>);
@@ -47,7 +48,7 @@ export default async function InquiryDetail({ params }: { params: Promise<{ id: 
             <Row k="Ekspress">{i.express ? "Ønsker levering innen 24 timer" : "Nei"}</Row>
             <Row k="Trykk">{i.printUse ? "Ønsker å avklare bruk av bilder i trykk" : "Nei"}</Row>
             <Row k="Kontakt">{i.contactName}</Row>
-            <Row k="E-post"><a className="link" href={`mailto:${i.contactEmail}`}>{i.contactEmail}</a></Row>
+            <Row k="E-post"><a className="link" href={mailtoHref(i.contactEmail)}>{i.contactEmail}</a></Row>
             {i.contactPhone && <Row k="Telefon">{i.contactPhone}</Row>}
           </dl>
         </section>
