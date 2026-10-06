@@ -10,6 +10,8 @@ import { CloseIcon } from "./Icons";
  */
 export function RequestDialog({ children, customerName }: { children: React.ReactNode; customerName: string }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Marker tekst i et felt og slipp over bakgrunnen skal ikke lukke skjemaet: begge ender av klikket må være på bakgrunnen.
+  const pressedBackdrop = useRef(false);
 
   const open = useCallback(() => {
     const d = ref.current;
@@ -37,7 +39,8 @@ export function RequestDialog({ children, customerName }: { children: React.Reac
       ref={ref}
       className="request-dialog"
       aria-labelledby="foresporsel-heading"
-      onClick={(e) => { if (e.target === e.currentTarget) ref.current?.close(); }}
+      onMouseDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
+      onClick={(e) => { if (e.target === e.currentTarget && pressedBackdrop.current) ref.current?.close(); pressedBackdrop.current = false; }}
     >
       <div className="request-dialog__panel">
         <div className="request-dialog__bar">

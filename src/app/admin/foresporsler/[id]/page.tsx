@@ -30,6 +30,10 @@ export default async function InquiryDetail({ params }: { params: Promise<{ id: 
           <StatusBadge status={i.status} />
         </div>
         <p className="mt-1 text-muted">{i.customer.name} · <span className="mono-num">{i.reference}</span> · innsendt {formatDateTime(i.createdAt)}</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <a className="btn btn-dark btn-sm" href={`mailto:${encodeURIComponent(i.contactEmail).replace(/%40/g, "@")}?subject=${encodeURIComponent(`Re: Forespørsel ${i.reference} – ${i.eventName}`)}`}>Svar på e-post</a>
+          {i.contactPhone && <a className="btn btn-outline btn-sm" href={`tel:${i.contactPhone.replace(/[^\d+]/g, "")}`}>Ring {i.contactPhone}</a>}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
@@ -51,7 +55,7 @@ export default async function InquiryDetail({ params }: { params: Promise<{ id: 
 
         <section className="card p-6 min-w-0" aria-labelledby="snap">
           <h2 id="snap" className="title text-lg">Pris slik kunden så den</h2>
-          <p className="text-sm text-muted mt-1">{s.agreementLabel} · versjon {s.versionNumber}. Endres ikke av senere publiseringer.</p>
+          <p className="text-sm text-muted mt-1">{s.agreementLabel} · <Link className="link" href={`/admin/kunder/${i.customerId}/versjoner/${s.versionNumber}`}>versjon {s.versionNumber}</Link>. Endres ikke av senere publiseringer.</p>
           {s.package ? (
             <div className="mt-4 text-[15px]">
               <p className="font-semibold">{s.package.name}</p>

@@ -14,6 +14,8 @@ interface Props {
   disabledReason?: string;
   emailConfigured: boolean;
   contactEmail: string;
+  /** Navnet som følger opp forespørselen (kontaktpersonen i avtalen). */
+  contactName: string;
 }
 
 interface Values {
@@ -50,10 +52,11 @@ export function InquiryForm(props: Props) {
   const [v, setV] = useState<Values>(INITIAL);
   const [errors, setErrors] = useState<Errors>({});
   const [sending, setSending] = useState(false);
-  const [serverError, setServerError] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [stale, setStale] = useState(false);
   const [updated, setUpdated] = useState(false);
+  const [slow, setSlow] = useState(false);
   const keyRef = useRef<string>("");
   const honeypot = useRef<HTMLInputElement>(null);
   const seenVersion = useRef(props.versionId);
@@ -77,6 +80,13 @@ export function InquiryForm(props: Props) {
     }
   }, [props.versionId, props.packages, stale]);
 
+  // Hvis den nye versjonen ikke har kommet etter noen sekunder, må kunden kunne komme videre.
+  useEffect(() => {
+    if (!stale || updated) { setSlow(false); return; }
+    const t = setTimeout(() => setSlow(true), 6000);
+    return () => clearTimeout(t);
+  }, [stale, updated]);
+
   const set = useCallback(<K extends keyof Values>(k: K, val: Values[K]) => setV((p) => ({ ...p, [k]: val })), []);
 
   const validate = (): Errors => {
@@ -95,7 +105,7 @@ export function InquiryForm(props: Props) {
     if (sending || disabled || stale) return;
     const errs = validate();
     setErrors(errs);
-    setServerError(false);
+    setServerError(null);
     if (Object.keys(errs).length) {
       setTimeout(() => errorSummary.current?.focus(), 0);
       return;
@@ -119,14 +129,34 @@ export function InquiryForm(props: Props) {
       } else if (res.status === 422 && data.fieldErrors) {
         setErrors(data.fieldErrors);
         setTimeout(() => errorSummary.current?.focus(), 0);
+      } else if (res.status === 404) {
+        setServerError("Denne siden er ikke lenger tilgjengelig.");
+      } else if (res.status === 429) {
+        setServerError("Det er sendt for mange forsøk på kort tid. Vent noen minutter og prøv igjen.");
       } else {
-        setServerError(true);
+        setServerError("Vi fikk ikke sendt forespørselen. Prøv igjen.");
       }
     } catch {
-      setServerError(true);
+      setServerError("Vi fikk ikke sendt forespørselen. Sjekk nettforbindelsen og prøv igjen.");
     } finally {
       setSending(false);
     }
+  }
+
+  /** Tilbake til et tomt skjema for neste arrangement. Kontaktopplysningene beholdes. */
+  function newRequest() {
+    setV((p) => ({ ...INITIAL, contactName: p.contactName, contactEmail: p.contactEmail, contactPhone: p.contactPhone }));
+    setErrors({});
+    setServerError(null);
+    setReceipt(null);
+    setTimeout(() => document.getElementById("foresporsel-heading")?.focus(), 0);
+  }
+
+  /** Lukker dialogen og viser pakkene, så kunden kan se prisene som gjelder nå. */
+  function showUpdatedPrices(e: React.MouseEvent<HTMLElement>) {
+    setStale(false);
+    (e.currentTarget.closest("dialog") as HTMLDialogElement | null)?.close();
+    document.getElementById("pakker")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   if (receipt) {
@@ -134,7 +164,7 @@ export function InquiryForm(props: Props) {
       <div>
         <h2 id="foresporsel-heading" tabIndex={-1} className="display text-2xl md:text-3xl outline-none">Forespørsel mottatt</h2>
         <div role="status" className="mt-4">
-          <p className="ingress text-[17px]">Takk! Vi har mottatt forespørselen din. Kai følger opp for å avklare tilgjengelighet og detaljer.</p>
+          <p className="ingress text-[17px]">Takk! Vi har mottatt forespørselen din. {props.contactName} følger opp for å avklare tilgjengelighet og detaljer.</p>
           {props.emailConfigured && <p className="mt-2 text-sm text-muted">Vi sender også en kopi på e-post.</p>}
         </div>
         <dl className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-[max-content_1fr] text-[15px] border-t border-line pt-6">
@@ -144,6 +174,7 @@ export function InquiryForm(props: Props) {
           <dt className="eyebrow">Dato</dt><dd>{receipt.eventDate ? formatCalendarDate(receipt.eventDate) : "Ikke avklart"}</dd>
         </dl>
         <p className="mt-6 text-sm text-muted">Dette er en forespørsel. Oppdraget er bekreftet først når du har fått bekreftelse fra Chen Media.</p>
+        <button type="button" className="btn btn-outline btn-sm mt-6" onClick={newRequest}>Send en ny forespørsel</button>
       </div>
     );
   }
@@ -166,13 +197,23 @@ export function InquiryForm(props: Props) {
         <div role="alert" className="mt-4 rounded-xl border-2 border-ink bg-cream px-4 py-3">
           {updated ? (
             <>
-              <p className="font-semibold"><span className="status-dot" aria-hidden="true" />Prislisten er oppdatert mens du fylte ut skjemaet. Gå gjennom pakkene og prisene over, velg pakke på nytt om nødvendig, og bekreft før du sender. Teksten din er beholdt.</p>
-              <button type="button" className="btn btn-dark btn-sm mt-3" onClick={() => setStale(false)}>
-                Jeg har gått gjennom den oppdaterte prislisten
-              </button>
+              <p className="font-semibold"><span className="status-dot" aria-hidden="true" />Prislisten er oppdatert mens du fylte ut skjemaet. Se gjennom pakkene og prisene, velg pakke på nytt om nødvendig, og bekreft før du sender. Teksten din er beholdt.</p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button type="button" className="btn btn-outline btn-sm" onClick={showUpdatedPrices}>Lukk og se oppdaterte priser</button>
+                <button type="button" className="btn btn-dark btn-sm" onClick={() => setStale(false)}>
+                  Jeg har gått gjennom den oppdaterte prislisten
+                </button>
+              </div>
             </>
           ) : (
-            <p className="font-semibold"><span className="status-dot" aria-hidden="true" />Prislisten er oppdatert. Henter ny versjon …</p>
+            <>
+              <p className="font-semibold"><span className="status-dot" aria-hidden="true" />Prislisten er oppdatert. Henter ny versjon …</p>
+              {slow && (
+                <p className="mt-2 text-sm">
+                  Det tar lenger tid enn vanlig. Du kan <button type="button" className="link font-semibold" onClick={() => window.location.reload()}>laste siden på nytt</button> for å se de nye prisene, men skjemateksten din går da tapt.
+                </p>
+              )}
+            </>
           )}
         </div>
       )}
@@ -294,7 +335,7 @@ export function InquiryForm(props: Props) {
 
       {serverError && (
         <p role="alert" className="mt-6 rounded-xl border-2 border-err px-4 py-3 font-semibold text-err">
-          Vi fikk ikke sendt forespørselen. Prøv igjen, eller kontakt <a className="underline" href={mailtoHref(props.contactEmail || "kai@chenmedia.no")}>{props.contactEmail || "kai@chenmedia.no"}</a>.
+          {serverError} Du kan også kontakte <a className="underline" href={mailtoHref(props.contactEmail || "kai@chenmedia.no")}>{props.contactEmail || "kai@chenmedia.no"}</a>.
         </p>
       )}
 

@@ -27,7 +27,7 @@ test("kunde: viser pakker, velger pakke, sender forespørsel og admin ser den", 
   // Skjemaet er skjult til man ber om det
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.getByLabel("Arrangementets navn eller type")).toBeHidden();
-  await page.getByRole("button", { name: /Forespør – Medium event/ }).click();
+  await page.getByRole("button", { name: /Forespør denne pakken – Medium event/ }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByLabel("Pakke", { exact: true })).toHaveValue("pkg_medium");
   await expect(page.getByTestId("selected-package")).toContainText("Medium event");
@@ -80,9 +80,18 @@ test("admin: utkast er usynlig for kunde til publisering, deretter ny pris på s
   await adminLogin(page);
   await page.getByRole("link", { name: "Åpne OBOS" }).click();
 
-  await page.getByLabel("Pris (kr, eks. mva.)").first().fill("6500");
+  // Norsk tusenskille: «16.000» er 16 000 kr (ikke 16 kr), og tolket beløp vises under feltet
+  const price = page.getByLabel("Pris (kr, eks. mva.)").first();
+  await price.fill("16.000");
+  await expect(page.getByText(/^= 16\s000\skr$/).first()).toBeVisible();
+  await price.fill("6500");
+  await expect(page.getByText(/^= 6\s500\skr$/).first()).toBeVisible();
+  // Publisering sperres mens det finnes ulagrede endringer
+  await expect(page.getByRole("button", { name: "Publiser" })).toBeDisabled();
+  await expect(page.getByText("Du har ulagrede endringer. Lagre utkastet før du publiserer.")).toBeVisible();
   await page.getByRole("button", { name: "Lagre utkast" }).first().click();
   await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publiser" })).toBeEnabled();
 
   const cust = await (await browser.newContext()).newPage();
   await cust.goto(link);
@@ -93,6 +102,12 @@ test("admin: utkast er usynlig for kunde til publisering, deretter ny pris på s
   await page.getByRole("link", { name: "Forhåndsvis utkast" }).click();
   await expect(page.getByText("Forhåndsvisning av utkastet")).toBeVisible();
   await expect(page.getByText(/^6\s500\skr$/)).toBeVisible();
+  // Utskrift fra forhåndsvisningen: admin-toppen og banneren skjules, og arket får ikke avkuttede marger
+  await page.emulateMedia({ media: "print" });
+  await expect(page.getByText("Forhåndsvisning av utkastet")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Logg ut" })).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.emulateMedia({ media: "screen" });
   await page.getByRole("link", { name: "Tilbake til redigering" }).click();
 
   page.once("dialog", (d) => d.accept());
@@ -138,6 +153,10 @@ test("kunde med foreldet side får beskjed om ny versjon og beholder teksten", a
   const admin = await (await browser.newContext()).newPage();
   await adminLogin(admin);
   await admin.getByRole("link", { name: "Åpne OBOS" }).click();
+  // Publisering krever en endring: et uendret utkast kan ikke publiseres på nytt
+  await admin.getByLabel("Pris (kr, eks. mva.)").first().fill("6600");
+  await admin.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(admin.getByText("Utkastet er lagret.").first()).toBeVisible();
   admin.once("dialog", (d) => d.accept());
   await admin.getByRole("button", { name: "Publiser" }).click();
   await expect(admin.getByText("Publisert. Kundelenken viser nå den nye versjonen.")).toBeVisible();
@@ -147,9 +166,22 @@ test("kunde med foreldet side får beskjed om ny versjon og beholder teksten", a
   await expect(page.getByLabel("Arrangementets navn eller type")).toHaveValue("Foreldet test");
   await expect(page.getByRole("button", { name: "Send forespørsel" })).toBeDisabled();
 
-  await page.getByRole("button", { name: "Jeg har gått gjennom den oppdaterte prislisten" }).click();
+  // Kunden kan lukke skjemaet for å se de nye prisene, og teksten beholdes når det åpnes igjen
+  await expect(page.getByRole("button", { name: "Jeg har gått gjennom den oppdaterte prislisten" })).toBeVisible();
+  await page.getByRole("button", { name: "Lukk og se oppdaterte priser" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.locator("#pakker")).toBeInViewport();
+  await page.getByTestId("open-form").click();
+  await expect(page.getByLabel("Arrangementets navn eller type")).toHaveValue("Foreldet test");
+  await page.getByLabel("Pakke", { exact: true }).selectOption("pkg_lite");
   await page.getByRole("button", { name: "Send forespørsel" }).click();
   await expect(page.getByText("Takk! Vi har mottatt forespørselen din.")).toBeVisible();
+
+  // Nytt skjema for neste arrangement: tomt, men kontaktopplysningene beholdes
+  await page.getByRole("button", { name: "Send en ny forespørsel" }).click();
+  await expect(page.getByLabel("Arrangementets navn eller type")).toHaveValue("");
+  await expect(page.getByLabel("Kontaktperson")).toHaveValue("Stale Test");
+  await expect(page.getByLabel("E-post", { exact: true })).toHaveValue("stale@example.com");
 });
 
 test("admin får varsel i nettsiden når en ny forespørsel kommer inn", async ({ page, browser }) => {
@@ -229,8 +261,31 @@ test("skjemaet ligger bak knapp: Esc lukker, teksten beholdes, og flytende knapp
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
   await expect(sticky).toHaveClass(/sticky-cta--on/);
+  // Ved bunnfeltet skjules den, så den ikke dekker bunnteksten
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(sticky).not.toHaveClass(/sticky-cta--on/);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
+  await expect(sticky).toHaveClass(/sticky-cta--on/);
   await sticky.getByRole("button").click();
   await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("skjemaet: markering som slippes over bakgrunnen lukker ikke dialogen", async ({ page }) => {
+  await page.goto(await obosLink());
+  await page.getByTestId("open-form").click();
+  const field = page.getByLabel("Arrangementets navn eller type");
+  await field.fill("Markert tekst");
+  const box = (await field.boundingBox())!;
+  const vp = page.viewportSize()!;
+  // Trykk i feltet og slipp helt ute på bakgrunnen (utenfor panelet)
+  await page.mouse.move(box.x + 10, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(vp.width - 4, vp.height / 2);
+  await page.mouse.up();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  // Et ekte klikk på bakgrunnen lukker den fortsatt
+  await page.mouse.click(vp.width - 4, vp.height / 2);
+  await expect(page.getByRole("dialog")).toBeHidden();
 });
 
 test("admin: store bilder og feilmerkede filer komprimeres til WebP (maks 1600 px) før opplasting", async ({ page }) => {
@@ -329,14 +384,25 @@ test("admin legger inn galleri og pakkebilde, kunden ser dem, og utskriften skju
 test("utskrift: knapper og dialog skjules, priser og vilkår beholdes", async ({ page }) => {
   await page.goto(await obosLink());
   await expect(page.getByRole("button", { name: /Skriv ut eller lagre som PDF/ })).toBeVisible();
+  // Filnavnet ved «Lagre som PDF» følger sidetittelen, som byttes bare mens utskriften pågår
+  const screenTitle = await page.title();
+  await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+  expect(await page.title()).toMatch(/^Chen Media - Prisliste OBOS/);
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  expect(await page.title()).toBe(screenTitle);
   await page.emulateMedia({ media: "print" });
   await expect(page.getByTestId("open-form")).toBeHidden();
   await expect(page.locator(".sticky-cta")).toBeHidden();
-  await expect(page.getByRole("button", { name: /Forespør – Medium event/ })).toBeHidden();
+  await expect(page.getByRole("button", { name: /Forespør denne pakken – Medium event/ })).toBeHidden();
   await expect(page.getByText(/^10\s000\skr$/)).toBeVisible();
   await expect(page.getByText("Betalingsfrist: 30 dager.")).toBeVisible();
-  // Bunnteksten skal være lesbar (ikke hvit på hvit), og prislisten får plass på én A4-side
-  await expect(page.locator(".site-footer h2").first()).toHaveCSS("color", "rgb(17, 17, 17)");
+  // PDF-en følger nettsidens uttrykk: kremfarget side og svart bunnfelt med lys tekst (lesbar, ikke hvit på hvitt)
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(251, 248, 208)");
+  await expect(page.locator(".site-footer")).toHaveCSS("background-color", "rgb(17, 17, 17)");
+  await expect(page.locator(".site-footer h2").first()).toHaveCSS("color", /rgba?\(255, 255, 255/);
+  // Pakkene står side om side som på nettsiden, og prislisten får plass på én A4-side
+  const tops = await page.locator(".pkg-card").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1);
   const pdf = await page.pdf({ format: "A4", preferCSSPageSize: true });
   expect(pdf.length).toBeGreaterThan(10_000);
   expect((pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length).toBe(1);
@@ -392,4 +458,82 @@ test("kontaktperson hos bedriften vises ikke på kundesiden", async ({ page, bro
   const cust = await (await browser.newContext()).newPage();
   await cust.goto(await obosLink());
   await expect(cust.getByText("Skjult Person")).toHaveCount(0);
+});
+
+test("admin: søk, status «Booket» og CSV-eksport av forespørsler", async ({ page, browser }) => {
+  const tag = `Eksport${Date.now().toString(36)}`;
+  const cust = await (await browser.newContext()).newPage();
+  await cust.goto(await obosLink());
+  await cust.getByTestId("open-form").click();
+  await cust.getByLabel("Pakke", { exact: true }).selectOption("other");
+  await cust.getByLabel("Arrangementets navn eller type").fill(tag);
+  await cust.getByLabel("Dato er ikke avklart").check();
+  await cust.getByLabel("Sted er ikke avklart").check();
+  await cust.getByLabel("Beskrivelse av behovet").fill("=HYPERLINK(\"http://eksempel.no\")");
+  await cust.getByLabel("Kontaktperson").fill("Eksport Test");
+  await cust.getByLabel("E-post", { exact: true }).fill("eksport@example.com");
+  await cust.getByRole("button", { name: "Send forespørsel" }).click();
+  await expect(cust.getByText("Takk! Vi har mottatt forespørselen din.")).toBeVisible();
+
+  await adminLogin(page);
+  await page.goto("/admin/foresporsler");
+  await page.getByLabel("Søk").fill(tag.toLowerCase());
+  await page.getByRole("button", { name: "Filtrer" }).click();
+  await expect(page.getByText("Viser 1 av 1 forespørsel.")).toBeVisible();
+  await page.getByRole("link", { name: tag }).click();
+
+  // Svar og ring-knapper, og ny status
+  await expect(page.getByRole("link", { name: "Svar på e-post" })).toHaveAttribute("href", /^mailto:eksport@example\.com\?subject=Re%3A/);
+  await page.getByLabel("Oppfølgingsstatus").selectOption("booked");
+  await page.getByRole("button", { name: "Lagre", exact: true }).click();
+  await expect(page.getByText("Lagret.")).toBeVisible();
+  await page.goto(`/admin/foresporsler?q=${tag}&status=booked`);
+  await expect(page.getByText("Viser 1 av 1 forespørsel.")).toBeVisible();
+
+  // CSV: BOM, semikolon, og formel nøytralisert
+  const res = await page.request.get(`/admin/foresporsler/eksport?q=${tag}`);
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toContain("text/csv");
+  expect(res.headers()["content-disposition"]).toMatch(/attachment; filename="foresporsler-\d{4}-\d{2}-\d{2}\.csv"/);
+  const csv = (await res.body()).toString("utf8");
+  expect(csv.startsWith("﻿Referanse;")).toBe(true);
+  expect(csv).toContain(tag);
+  expect(csv).toContain("Booket");
+  expect(csv).toContain("'=HYPERLINK");
+  expect(csv).not.toMatch(/;=HYPERLINK|;"=HYPERLINK/);
+  // Uten innlogging er eksporten stengt
+  expect((await (await browser.newContext()).request.get("/admin/foresporsler/eksport")).status()).toBe(401);
+});
+
+test("admin: gjenopprett versjon som utkast, og vern mot samtidige endringer", async ({ page, browser }) => {
+  await adminLogin(page);
+  await page.getByRole("link", { name: "Åpne OBOS" }).click();
+  await page.waitForURL(/\/admin\/kunder\/[^/]+$/);
+  const customerUrl = page.url();
+
+  // Gjenopprett versjon 1 som utkast
+  await page.getByRole("link", { name: "Versjonshistorikk" }).click();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: /Gjenopprett versjon 1 som utkast/ }).click();
+  await expect(page.getByText("Utkastet er erstattet med innholdet i versjon 1.")).toBeVisible();
+  await expect(page.getByLabel("Pris (kr, eks. mva.)").first()).toHaveValue("6000");
+
+  // To faner: den som lagrer sist får beskjed i stedet for å overskrive i det stille
+  const other = await (await browser.newContext({ storageState: await page.context().storageState() })).newPage();
+  await other.goto(customerUrl);
+  await other.getByLabel("Tittel (valgfritt)").fill("Fra fane to");
+  await other.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(other.getByText("Utkastet er lagret.").first()).toBeVisible();
+
+  await page.getByLabel("Tittel (valgfritt)").fill("Fra fane én");
+  await page.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(page.getByText(/lagret av noen andre/).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Lagre og overskriv" })).toBeVisible();
+  // Lagre og overskriv går gjennom, og videre lagring fungerer uten ny konflikt
+  await page.getByRole("button", { name: "Lagre og overskriv" }).click();
+  await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
+  await page.getByLabel("Tittel (valgfritt)").fill("Fra fane én, igjen");
+  await page.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
+  await expect(page.getByText(/lagret av noen andre/)).toHaveCount(0);
 });

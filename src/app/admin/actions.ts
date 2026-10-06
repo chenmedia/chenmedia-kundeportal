@@ -7,14 +7,14 @@ import { z } from "zod";
 import { SESSION_COOKIE, login, logout, requireAdmin } from "@/server/admin-auth";
 import { clientIp } from "@/server/rate-limit";
 import { parseContactForm } from "@/lib/customer-contact";
-import { assetsBelongToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, rotateToken, saveDraft, setActive } from "@/server/customers";
+import { DraftConflictError, assetsBelongToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, restoreVersionAsDraft, rotateToken, saveDraft, setActive } from "@/server/customers";
 import { deleteInquiry, updateInquiryFollowUp } from "@/server/inquiries";
 import { contentImageIds, contentSchema } from "@/lib/content";
 import { STATUSES } from "@/lib/inquiry";
 import { processJob } from "@/server/email";
 import { logError } from "@/server/log";
 
-export interface ActionState { ok?: boolean; error?: string; problems?: string[]; fieldErrors?: Record<string, string>; values?: Record<string, string> }
+export interface ActionState { ok?: boolean; updatedAt?: string; conflict?: boolean; error?: string; problems?: string[]; fieldErrors?: Record<string, string>; values?: Record<string, string> }
 
 function formValues(fd: FormData, keys: string[]): Record<string, string> {
   return Object.fromEntries(keys.map((k) => [k, String(fd.get(k) ?? "")]));
@@ -62,7 +62,7 @@ export async function createCustomerAction(_prev: ActionState, fd: FormData): Pr
   redirect(`/admin/kunder/${id}`);
 }
 
-export async function saveDraftAction(customerId: string, name: string, contentJson: string): Promise<ActionState> {
+export async function saveDraftAction(customerId: string, name: string, contentJson: string, expectedUpdatedAt?: string | null): Promise<ActionState> {
   await requireAdmin();
   const nm = name.trim();
   if (nm.length < 1) return { error: "Kundenavn kan ikke være tomt." };
@@ -74,14 +74,18 @@ export async function saveDraftAction(customerId: string, name: string, contentJ
   }
   // Bilder må tilhøre denne kunden.
   if (!(await assetsBelongToCustomer(contentImageIds(parsed), customerId))) return { error: "Et av bildene tilhører ikke denne kunden." };
+  let saved: { updatedAt: Date };
   try {
-    await saveDraft(customerId, nm, parsed);
+    saved = await saveDraft(customerId, nm, parsed, expectedUpdatedAt);
   } catch (e) {
+    if (e instanceof DraftConflictError) {
+      return { conflict: true, error: "Utkastet er lagret av noen andre (eller i en annen fane) siden du åpnet siden. Last siden på nytt for å se endringene, eller lagre og overskriv dem." };
+    }
     logError("customer.save-draft", e, { customerId });
     return { error: "Kunne ikke lagre utkastet. Endringene dine er fortsatt her. Prøv igjen." };
   }
   revalidatePath(`/admin/kunder/${customerId}`);
-  return { ok: true };
+  return { ok: true, updatedAt: saved.updatedAt.toISOString() };
 }
 
 export async function publishAction(customerId: string): Promise<ActionState> {
@@ -189,4 +193,12 @@ export async function updateContactAction(customerId: string, _prev: ActionState
   revalidatePath(`/admin/kunder/${customerId}`);
   revalidatePath("/admin");
   return { ok: true };
+}
+
+export async function restoreVersionAction(customerId: string, versionNumber: number): Promise<void> {
+  await requireAdmin();
+  if (!Number.isInteger(versionNumber) || versionNumber < 1) return;
+  if (!(await restoreVersionAsDraft(customerId, versionNumber))) return;
+  revalidatePath(`/admin/kunder/${customerId}`);
+  redirect(`/admin/kunder/${customerId}?gjenopprettet=${versionNumber}`);
 }

@@ -46,6 +46,7 @@ export async function submitInquiry(args: {
     package: pkg,
     addons: pub.content.addons,
     practical: pub.content.practical,
+    contactName: pub.content.contactName,
   };
 
   // Kvitteringen går til adressen kunden oppgir. Uten tak kan skjemaet misbrukes til å sende tekst fra
