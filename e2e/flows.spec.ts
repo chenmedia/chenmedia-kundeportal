@@ -93,6 +93,12 @@ test("admin: utkast er usynlig for kunde til publisering, deretter ny pris på s
   await page.getByRole("link", { name: "Forhåndsvis utkast" }).click();
   await expect(page.getByText("Forhåndsvisning av utkastet")).toBeVisible();
   await expect(page.getByText(/^6\s500\skr$/)).toBeVisible();
+  // Utskrift fra forhåndsvisningen: admin-toppen og banneren skjules, og arket får ikke avkuttede marger
+  await page.emulateMedia({ media: "print" });
+  await expect(page.getByText("Forhåndsvisning av utkastet")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Logg ut" })).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.emulateMedia({ media: "screen" });
   await page.getByRole("link", { name: "Tilbake til redigering" }).click();
 
   page.once("dialog", (d) => d.accept());
@@ -329,14 +335,25 @@ test("admin legger inn galleri og pakkebilde, kunden ser dem, og utskriften skju
 test("utskrift: knapper og dialog skjules, priser og vilkår beholdes", async ({ page }) => {
   await page.goto(await obosLink());
   await expect(page.getByRole("button", { name: /Skriv ut eller lagre som PDF/ })).toBeVisible();
+  // Filnavnet ved «Lagre som PDF» følger sidetittelen, som byttes bare mens utskriften pågår
+  const screenTitle = await page.title();
+  await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+  expect(await page.title()).toMatch(/^Chen Media - Prisliste OBOS/);
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  expect(await page.title()).toBe(screenTitle);
   await page.emulateMedia({ media: "print" });
   await expect(page.getByTestId("open-form")).toBeHidden();
   await expect(page.locator(".sticky-cta")).toBeHidden();
   await expect(page.getByRole("button", { name: /Forespør – Medium event/ })).toBeHidden();
   await expect(page.getByText(/^10\s000\skr$/)).toBeVisible();
   await expect(page.getByText("Betalingsfrist: 30 dager.")).toBeVisible();
-  // Bunnteksten skal være lesbar (ikke hvit på hvit), og prislisten får plass på én A4-side
-  await expect(page.locator(".site-footer h2").first()).toHaveCSS("color", "rgb(17, 17, 17)");
+  // PDF-en følger nettsidens uttrykk: kremfarget side og svart bunnfelt med lys tekst (lesbar, ikke hvit på hvitt)
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(251, 248, 208)");
+  await expect(page.locator(".site-footer")).toHaveCSS("background-color", "rgb(17, 17, 17)");
+  await expect(page.locator(".site-footer h2").first()).toHaveCSS("color", /rgba?\(255, 255, 255/);
+  // Pakkene står side om side som på nettsiden, og prislisten får plass på én A4-side
+  const tops = await page.locator(".pkg-card").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1);
   const pdf = await page.pdf({ format: "A4", preferCSSPageSize: true });
   expect(pdf.length).toBeGreaterThan(10_000);
   expect((pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length).toBe(1);
