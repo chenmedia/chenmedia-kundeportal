@@ -5,10 +5,11 @@ import { randomReference, sha256 } from "./crypto";
 import { allow } from "./rate-limit";
 import { resolvePublished } from "./customers";
 import { buildEmails, notifyAddress, processInquiryJobs } from "./email";
+import { archiveDeals, gdprDeleteContact, hubspotConfigured } from "./hubspot";
 import { InquiryInput, InquirySnapshot, OTHER_PACKAGE } from "@/lib/inquiry";
 
 export type SubmitResult =
-  | { ok: true; reference: string; packageName: string; eventName: string; eventDate: string | null; duplicate: boolean }
+  | { ok: true; inquiryId: string; reference: string; packageName: string; eventName: string; eventDate: string | null; duplicate: boolean }
   | { ok: false; code: "UNAVAILABLE" | "STALE_VERSION" | "PACKAGE_GONE"; currentVersionId?: string };
 
 export async function submitInquiry(args: {
@@ -26,7 +27,7 @@ export async function submitInquiry(args: {
     if (existing.customerId !== pub.customerId) return { ok: false, code: "UNAVAILABLE" };
     const snap = JSON.parse(existing.snapshot) as InquirySnapshot;
     return {
-      ok: true, duplicate: true, reference: existing.reference,
+      ok: true, duplicate: true, inquiryId: existing.id, reference: existing.reference,
       packageName: snap.package?.name ?? "Usikker / annet behov",
       eventName: existing.eventName, eventDate: existing.eventDate,
     };
@@ -55,7 +56,7 @@ export async function submitInquiry(args: {
 
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      // Forespørsel og begge e-postjobber lagres i én atomisk operasjon (nested create).
+      // Forespørsel, e-postjobber og (når HubSpot er koblet til) overføringsraden lagres i én atomisk operasjon (nested create).
       const base = {
         id: crypto.randomUUID(),
         reference: randomReference(),
@@ -77,15 +78,21 @@ export async function submitInquiry(args: {
         printUse: i.printUse,
         idempotencyKey: args.idempotencyKey,
       };
+      // HubSpot varsler eieren via oppgaven som lages der, så teamvarsel på e-post sendes bare uten HubSpot (eller uten eier).
+      const hubspotNotifies = hubspotConfigured() && !!process.env.HUBSPOT_OWNER_ID;
       const emails = buildEmails(base, snapshot, notifyAddress(pub.content.contactEmail))
-        .filter((e) => sendReceipt || e.type !== "customer_receipt");
+        .filter((e) => (sendReceipt || e.type !== "customer_receipt") && (!hubspotNotifies || e.type !== "team_notification"));
       const inquiry = await db.inquiry.create({
-        data: { ...base, emailJobs: { create: emails.map((e) => ({ ...e, replyTo: e.replyTo ?? null })) } },
+        data: {
+          ...base,
+          emailJobs: { create: emails.map((e) => ({ ...e, replyTo: e.replyTo ?? null })) },
+          ...(hubspotConfigured() ? { crmSync: { create: {} } } : {}),
+        },
       });
       // E-postfeil skal aldri påvirke forespørselen; processInquiryJobs kaster ikke.
       await processInquiryJobs(inquiry.id).catch(() => undefined);
       return {
-        ok: true, duplicate: false, reference: inquiry.reference,
+        ok: true, duplicate: false, inquiryId: inquiry.id, reference: inquiry.reference,
         packageName: pkg?.name ?? "Usikker / annet behov", eventName: inquiry.eventName, eventDate: inquiry.eventDate,
       };
     } catch (e) {
@@ -95,7 +102,7 @@ export async function submitInquiry(args: {
           // Parallell dobbeltsending: hent vinneren.
           const winner = await db.inquiry.findUnique({ where: { idempotencyKey: args.idempotencyKey } });
           if (winner) {
-            return { ok: true, duplicate: true, reference: winner.reference, packageName: pkg?.name ?? "Usikker / annet behov", eventName: winner.eventName, eventDate: winner.eventDate };
+            return { ok: true, duplicate: true, inquiryId: winner.id, reference: winner.reference, packageName: pkg?.name ?? "Usikker / annet behov", eventName: winner.eventName, eventDate: winner.eventDate };
           }
         }
         continue; // referansekollisjon: prøv ny referanse
@@ -110,13 +117,31 @@ export async function updateInquiryFollowUp(id: string, status: string, internal
   await db.inquiry.update({ where: { id }, data: { status, internalNotes } });
 }
 
+export interface DeleteByEmailResult {
+  count: number;
+  /** Antall dealer arkivert i HubSpot. */
+  archivedDeals: number;
+  /** Om kontakten ble slettet permanent i HubSpot (bare når admin ba om det). */
+  contactDeleted: boolean;
+}
+
 /**
  * Sletter alle forespørsler fra en kontakt-e-postadresse (innsynskrav/sletting). E-postjobbene følger med (cascade).
- * Gir antall slettede forespørsler.
+ * Dealer som er opprettet i HubSpot arkiveres først; feiler det, slettes ingenting (kaster), så vi aldri mister
+ * koblingen til dealer som fortsatt inneholder personopplysninger. Kontakten i HubSpot slettes bare når `deleteContact`
+ * er satt: den kan være en ordinær kunde som finnes der fra før.
  */
-export async function deleteInquiriesByEmail(email: string): Promise<number> {
-  const r = await db.inquiry.deleteMany({ where: { contactEmail: { equals: email.trim(), mode: "insensitive" } } });
-  return r.count;
+export async function deleteInquiriesByEmail(email: string, opts: { deleteContact?: boolean } = {}): Promise<DeleteByEmailResult> {
+  const where = { contactEmail: { equals: email.trim(), mode: "insensitive" as const } };
+  const dealIds = (await db.crmSync.findMany({ where: { inquiry: where, dealId: { not: null } }, select: { dealId: true } }))
+    .map((r) => r.dealId!);
+  if (dealIds.length > 0 || opts.deleteContact) {
+    if (!hubspotConfigured()) throw new Error("HubSpot er ikke konfigurert");
+  }
+  if (dealIds.length > 0) await archiveDeals(dealIds);
+  if (opts.deleteContact) await gdprDeleteContact(email.trim());
+  const r = await db.inquiry.deleteMany({ where });
+  return { count: r.count, archivedDeals: dealIds.length, contactDeleted: !!opts.deleteContact };
 }
 
 /** E-postjobber slettes med cascade. Kundeinnhold og versjoner påvirkes ikke. */

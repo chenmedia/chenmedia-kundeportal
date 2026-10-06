@@ -13,6 +13,7 @@
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
     "db:setup": "prisma migrate deploy && npm run db:seed",
     "admin:create": "tsx --env-file=.env scripts/create-admin.ts",
+    "hubspot:setup": "tsx --env-file=.env scripts/hubspot-setup.ts",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy"
   },

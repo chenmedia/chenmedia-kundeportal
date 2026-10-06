@@ -27,8 +27,19 @@ export async function newInquirySnapshot(take = 5): Promise<NewInquirySnapshot> 
 
 export const failedEmailCount = () => db.emailJob.count({ where: { status: "failed" } });
 
+/** Overføringer til HubSpot som har feilet, eller som har stått uferdige i over en time (funksjonen kan ha dødd). */
+export const failedCrmCount = () =>
+  db.crmSync.count({
+    where: {
+      OR: [
+        { status: "failed" },
+        { status: { in: ["pending", "syncing"] }, createdAt: { lt: new Date(Date.now() - 3600_000) } },
+      ],
+    },
+  });
+
 export async function dashboardData(search: string) {
-  const [customers, newInquiries, failedJobs, newCounts] = await Promise.all([
+  const [customers, newInquiries, failedJobs, failedCrm, newCounts] = await Promise.all([
     db.customer.findMany({
       where: search ? { name: { contains: search, mode: "insensitive" } } : undefined,
       orderBy: { name: "asc" },
@@ -37,12 +48,13 @@ export async function dashboardData(search: string) {
     }),
     db.inquiry.findMany({ where: { status: "new" }, orderBy: { createdAt: "desc" }, take: 5, include: { customer: true } }),
     failedEmailCount(),
+    failedCrmCount(),
     db.inquiry.groupBy({ by: ["customerId"], where: { status: "new" }, _count: true }),
   ]);
-  return { customers, newInquiries, failedJobs, newCountByCustomer: new Map(newCounts.map((c) => [c.customerId, c._count])) };
+  return { customers, newInquiries, failedJobs, failedCrm, newCountByCustomer: new Map(newCounts.map((c) => [c.customerId, c._count])) };
 }
 
-export interface InquiryFilters { status?: string; customerId?: string; failedEmail?: boolean; q?: string }
+export interface InquiryFilters { status?: string; customerId?: string; failedEmail?: boolean; failedCrm?: boolean; q?: string }
 
 /** Felles filter for listen og CSV-eksporten. Søket treffer arrangement, kontaktperson, e-post, referanse og kunde. */
 function inquiryWhere(f: InquiryFilters): Prisma.InquiryWhereInput {
@@ -51,6 +63,7 @@ function inquiryWhere(f: InquiryFilters): Prisma.InquiryWhereInput {
     ...(f.status ? { status: f.status } : {}),
     ...(f.customerId ? { customerId: f.customerId } : {}),
     ...(f.failedEmail ? { emailJobs: { some: { status: "failed" } } } : {}),
+    ...(f.failedCrm ? { crmSync: { is: { status: { not: "synced" } } } } : {}),
     ...(q
       ? {
           OR: [
@@ -75,7 +88,7 @@ export async function inquiryList(filters: InquiryFilters, take = INQUIRY_PAGE) 
     db.inquiry.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: { customer: true, emailJobs: { select: { status: true } } },
+      include: { customer: true, emailJobs: { select: { status: true } }, crmSync: { select: { status: true } } },
       take: Math.min(Math.max(take, 1), INQUIRY_MAX),
     }),
     db.inquiry.count({ where }),
@@ -88,7 +101,7 @@ export const inquiriesForExport = (filters: InquiryFilters) =>
   db.inquiry.findMany({ where: inquiryWhere(filters), orderBy: { createdAt: "desc" }, include: { customer: true }, take: 10_000 });
 
 export const inquiryDetail = (id: string) =>
-  db.inquiry.findUnique({ where: { id }, include: { customer: true, version: true, emailJobs: { orderBy: { createdAt: "asc" } } } });
+  db.inquiry.findUnique({ where: { id }, include: { customer: true, version: true, emailJobs: { orderBy: { createdAt: "asc" } }, crmSync: true } });
 
 export const recentEmailJobs = (take = 100) =>
   db.emailJob.findMany({ orderBy: { createdAt: "desc" }, take, include: { inquiry: { include: { customer: true } } } });

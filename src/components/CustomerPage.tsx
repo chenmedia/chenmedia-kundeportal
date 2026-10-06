@@ -23,6 +23,8 @@ export interface CustomerPageProps {
   emailConfigured?: boolean;
   /** Satt når automatisk sletting er slått på. Vises i personvernteksten. */
   retentionMonths?: number | null;
+  /** Satt når forespørsler overføres til HubSpot. Vises i personvernteksten. */
+  crmEnabled?: boolean;
 }
 
 function Included({ p }: { p: PackageContent }) {
@@ -274,6 +276,7 @@ export function CustomerPage(props: CustomerPageProps) {
               Opplysningene du sender inn i skjemaet brukes til å følge opp fotobehovet ditt hos Chen Media.
               Kontaktadressen vises slik at du kan ta kontakt direkte. Har du spørsmål om hvordan opplysningene behandles,
               kan du skrive til oss.
+              {props.crmEnabled ? " Opplysningene registreres også i Chen Medias kundesystem (HubSpot, datasenter i EU) slik at vi kan følge opp deg som kunde." : ""}
               {props.retentionMonths ? ` Opplysningene lagres i inntil ${props.retentionMonths} måneder etter at forespørselen er avsluttet, og du kan be oss slette dem tidligere.` : ""}
             </p>
           </div>

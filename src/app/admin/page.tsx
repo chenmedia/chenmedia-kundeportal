@@ -9,7 +9,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   await requireAdmin();
   const { q } = await searchParams;
   const query = (q ?? "").trim();
-  const { customers, newInquiries, failedJobs, newCountByCustomer: counts } = await dashboardData(query);
+  const { customers, newInquiries, failedJobs, failedCrm, newCountByCustomer: counts } = await dashboardData(query);
 
   return (
     <div className="grid gap-8">
@@ -21,6 +21,13 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
       {failedJobs > 0 && (
         <p role="alert" className="card px-5 py-4 border-2 !border-err font-semibold">
           {failedJobs} e-post{failedJobs === 1 ? "" : "er"} har feilet. <Link className="link" href="/admin/foresporsler?epost=feilet">Se forespørslene</Link> og prøv på nytt.
+        </p>
+      )}
+
+      {failedCrm > 0 && (
+        <p role="alert" className="card px-5 py-4 border-2 !border-err font-semibold">
+          {failedCrm} {failedCrm === 1 ? "forespørsel er" : "forespørsler er"} ikke overført til HubSpot. Åpne forespørselen og velg «Synk på nytt».{" "}
+          <Link className="link" href="/admin/foresporsler?hubspot=feilet">Se forespørslene</Link>
         </p>
       )}
 

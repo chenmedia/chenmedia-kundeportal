@@ -82,12 +82,12 @@ describe("sletting per e-postadresse", () => {
     const a = await inquiry({ email });
     const b = await inquiry({ email: email.toUpperCase() });
     const other = await inquiry();
-    expect(await deleteInquiriesByEmail(`  ${email.toLowerCase()} `)).toBe(2);
+    expect(await deleteInquiriesByEmail(`  ${email.toLowerCase()} `)).toMatchObject({ count: 2 });
     expect(await exists(a.id)).toBe(false);
     expect(await exists(b.id)).toBe(false);
     expect(await db.emailJob.count({ where: { inquiryId: { in: [a.id, b.id] } } })).toBe(0);
     expect(await exists(other.id)).toBe(true);
-    expect(await deleteInquiriesByEmail(email)).toBe(0);
+    expect(await deleteInquiriesByEmail(email)).toMatchObject({ count: 0 });
   });
 });
 

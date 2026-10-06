@@ -64,6 +64,7 @@ npm run dev                 # http://localhost:3000
 | `STORAGE_DIR` | Kun lokal utvikling uten Supabase. Virker ikke på Vercel. |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Brukes av seed / `admin:create`. Ingen hardkodet passord finnes. |
 | `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` | Aktiverer ekte e-post via Resend. Tomt = lokal utboks. |
+| `HUBSPOT_*` | Overføring av forespørsler til HubSpot, se «HubSpot». Tomt = av. |
 | `NOTIFY_EMAIL` | Mottaker av varsel om nye forespørsler (faller ellers tilbake til kontakt-e-posten på kundesiden). |
 | `SEED_DEMO_INQUIRIES` | `1` legger inn to eksempelforespørsler ved seed. |
 
@@ -145,6 +146,40 @@ npm run build       # produksjonsbygg
 # E2E (Playwright). Bruker databasen *_e2e og port 3100:
 CHROMIUM_PATH=/sti/til/chromium npx playwright test   # utelat CHROMIUM_PATH hvis `npx playwright install chromium` er kjørt
 ```
+
+## HubSpot
+
+Skjemaet på kundesiden er portalens eget (ikke et HubSpot-skjema), fordi portalen kjenner kunden, låser prisen kunden
+så og beskytter mot utdaterte versjoner. Etter innsending overføres forespørselen server-til-server til HubSpot:
+
+1. Kontakten finnes på e-post, ellers opprettes den. Eksisterende kontakter endres aldri.
+2. Selskapet finnes på kundenavn (oldest first), ellers opprettes det. ID-en bufres på kunden.
+3. Det opprettes en deal i pipelinen «Forespørsler» (steg «Ny forespørsel»), koblet til kontakt og selskap, med
+   pakke, avtaleversjon, dato, sted og lenke tilbake til admin. Beløp settes bare for fastpris.
+4. Er `HUBSPOT_OWNER_ID` satt, eier den personen dealen og får en oppgave. HubSpot varsler da etter egne
+   varslingsinnstillinger (sjekk *Innstillinger → Varsler* for deal- og oppgavetildeling). Teamvarselet på e-post
+   sendes da ikke fra portalen; kvitteringen til kunden sendes som før.
+
+Status flyttes manuelt i HubSpot. Feil lagres per forespørsel (`CrmSync`), vises i admin (merke, banner,
+«Synk på nytt») og prøves på nytt av `/api/cron/crm-sync` (daglig, maks fem forsøk i sju døgn). Kunden merker aldri feil.
+
+**Oppsett**
+
+1. Opprett en Private App i HubSpot med scopes: `crm.objects.contacts.read/write`, `crm.objects.companies.read/write`,
+   `crm.objects.deals.read/write`, `crm.objects.owners.read` og `crm.schemas.deals.read/write` (pipeline og egenskaper).
+   Oppgaver opprettes med kontakt-/dealscopene. Gir oppgaveopprettelse 403 («failed» med feilkode `http_403` i admin),
+   legg til scope for oppgaver/engasjementer. Rettighetene er ikke testet mot den faktiske kontoen.
+2. Kjør `HUBSPOT_ACCESS_TOKEN=... npm run hubspot:setup` (eller legg token i `.env`). Skriptet oppretter pipelinen og
+   dealegenskapene (trygt å kjøre flere ganger) og skriver ut `HUBSPOT_PIPELINE_ID` og `HUBSPOT_STAGE_NEW`.
+3. Sett `HUBSPOT_ACCESS_TOKEN` (Sensitive), `HUBSPOT_PIPELINE_ID`, `HUBSPOT_STAGE_NEW`, `HUBSPOT_OWNER_ID` og
+   `HUBSPOT_PORTAL_ID` i Vercel og redeploy. Uten de tre første er integrasjonen helt av.
+4. Migrasjon `0005_crm_sync` må være kjørt mot Supabase først.
+
+**Personvern.** Personopplysninger sendes bare til kontakten i HubSpot; dealbeskrivelsen inneholder ikke kontaktdata.
+Kontakter meldes ikke på markedsføring. Personvernteksten på kundesiden nevner HubSpot (EU-datasenter) når
+integrasjonen er på. Automatisk oppbevaringsfrist gjelder bare portalen: det som er overført til HubSpot følges opp og
+slettes der. «Slett alt fra en e-postadresse» arkiverer dealene i HubSpot først (og avbryter hvis det feiler), og kan
+valgfritt slette kontakten permanent (GDPR-sletting). Å slette én enkelt forespørsel i admin rører ikke HubSpot.
 
 ## Personvern og oppbevaring
 

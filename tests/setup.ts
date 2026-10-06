@@ -8,6 +8,7 @@ process.env.APP_URL = "http://localhost:3000";
 process.env.EMAIL_PROVIDER = "";
 process.env.STORAGE_DIR = "./storage-test";
 process.env.NOTIFY_EMAIL = "team@example.com";
+for (const k of Object.keys(process.env)) if (k.startsWith("HUBSPOT_")) delete process.env[k];
 delete process.env.SUPABASE_URL;
 delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 for (const k of ["SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]) delete process.env[k];
