@@ -8,7 +8,7 @@ import { StatusBadge, EMAIL_STATUS } from "@/components/AdminBits";
 import { DeleteForm, StatusForm } from "@/components/InquiryAdminForms";
 import { retryEmailAction } from "../../actions";
 import { mailtoHref } from "@/lib/content";
-import { PORTALS, parsePortalKind, portalLabel } from "@/lib/portal";
+import { kindLabel } from "@/lib/service";
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (<><dt className="eyebrow pt-1">{k}</dt><dd className="min-w-0 break-words">{children}</dd></>);
@@ -41,7 +41,7 @@ export default async function InquiryDetail({ params }: { params: Promise<{ id: 
         <section className="card p-6 min-w-0" aria-labelledby="innsendt">
           <h2 id="innsendt" className="title text-lg">Innsendte opplysninger</h2>
           <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-[max-content_1fr] text-[15px]">
-            <Row k="Tjeneste">{portalLabel(i.kind)}</Row>
+            <Row k="Tjeneste">{kindLabel(i.kind)}</Row>
             <Row k="Pakke">{s.package ? s.package.name : "Usikker / annet behov"}</Row>
             <Row k="Dato">{i.dateUnknown || !i.eventDate ? "Dato er ikke avklart" : formatCalendarDate(i.eventDate)}</Row>
             <Row k="Sted">{i.locationUnknown || !i.location ? "Sted er ikke avklart" : i.location}</Row>
@@ -57,7 +57,7 @@ export default async function InquiryDetail({ params }: { params: Promise<{ id: 
 
         <section className="card p-6 min-w-0" aria-labelledby="snap">
           <h2 id="snap" className="title text-lg">Pris slik kunden så den</h2>
-          <p className="text-sm text-muted mt-1">{s.agreementLabel} · <Link className="link" href={`/admin/kunder/${i.customerId}/versjoner/${s.versionNumber}?tjeneste=${PORTALS[parsePortalKind(i.kind) ?? "photo"].slug}`}>versjon {s.versionNumber}</Link>. Endres ikke av senere publiseringer.</p>
+          <p className="text-sm text-muted mt-1">{s.agreementLabel} · <Link className="link" href={`/admin/kunder/${i.customerId}/versjoner/${s.versionNumber}`}>versjon {s.versionNumber}</Link>. Endres ikke av senere publiseringer.</p>
           {s.package ? (
             <div className="mt-4 text-[15px]">
               <p className="font-semibold">{s.package.name}</p>

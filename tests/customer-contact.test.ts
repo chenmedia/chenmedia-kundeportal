@@ -3,7 +3,6 @@ import { db } from "@/server/db";
 import { createCustomer, duplicateCustomer, publish, resolvePublished, getRawToken, updateCustomerContact } from "@/server/customers";
 import { customerContactSchema, parseContactForm } from "@/lib/customer-contact";
 import { obosContent } from "@/server/seed-data";
-import { setDraftContent } from "./helpers";
 
 const form = (o: Record<string, string>) => { const fd = new FormData(); for (const [k, v] of Object.entries(o)) fd.set(k, v); return fd; };
 
@@ -52,7 +51,7 @@ describe("kontakt hos bedriften: lagring", () => {
 
   it("kontakten havner aldri i publisert innhold eller på kundesiden", async () => {
     const c = await createCustomer("Skjult kontakt AS", { contactName: "Hemmelig Person", contactEmail: "skjult@firma.no", contactPhone: "99999999" });
-    await setDraftContent(c.id, obosContent());
+    await db.customerDraft.update({ where: { customerId: c.id }, data: { content: JSON.stringify(obosContent()) } });
     const r = await publish(c.id);
     expect(r.ok).toBe(true);
     const pub = await resolvePublished((await getRawToken(c.id))!);

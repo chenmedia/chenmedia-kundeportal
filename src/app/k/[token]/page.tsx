@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { CustomerPage } from "@/components/CustomerPage";
-import { PORTALS, parsePortalKind } from "@/lib/portal";
+import { parseServiceKind } from "@/lib/service";
 import { resolvePublished } from "@/server/customers";
 import { emailConfigured } from "@/server/email";
 import { inquiryRetentionMonths } from "@/server/retention";
@@ -23,16 +23,14 @@ export const metadata = {
 
 export default async function Page({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ tjeneste?: string }> }) {
   const { token } = await params;
-  // ?tjeneste=film velger fane. Ukjent eller upublisert portal gir den første publiserte (aldri 404: lenken er gyldig).
-  const wanted = parsePortalKind((await searchParams).tjeneste);
-  const pub = await resolvePublished(token, wanted);
+  const initialKind = parseServiceKind((await searchParams).tjeneste);
+  const pub = await resolvePublished(token);
   if (!pub) notFound();
   return (
     <CustomerPage
       customerName={pub.customerName}
-      kind={pub.kind}
-      tabs={pub.available.map((kind) => ({ kind, href: `/k/${token}?tjeneste=${PORTALS[kind].slug}` }))}
       content={pub.content}
+      initialKind={initialKind}
       versionId={pub.version.id}
       versionNumber={pub.version.number}
       publishedAt={pub.version.publishedAt}

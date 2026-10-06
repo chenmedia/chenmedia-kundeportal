@@ -5,7 +5,7 @@ import { STATUS_LABELS, STATUSES, type InquirySnapshot } from "@/lib/inquiry";
 import { formatPackagePrice, todayInOslo } from "@/lib/format";
 import { toCsv } from "@/lib/csv";
 import { logError } from "@/server/log";
-import { parsePortalKind, portalLabel } from "@/lib/portal";
+import { INQUIRY_KINDS, kindLabel } from "@/lib/service";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const status = STATUSES.includes(sp.get("status") ?? "") ? sp.get("status")! : undefined;
   try {
-    const list = await inquiriesForExport({ status, customerId: sp.get("kunde") || undefined, kind: parsePortalKind(sp.get("tjeneste")) ?? undefined, failedEmail: sp.get("epost") === "feilet", q: sp.get("q") ?? undefined });
+    const list = await inquiriesForExport({ status, customerId: sp.get("kunde") || undefined, kind: (INQUIRY_KINDS as readonly string[]).includes(sp.get("tjeneste") ?? "") ? sp.get("tjeneste")! : undefined, failedEmail: sp.get("epost") === "feilet", q: sp.get("q") ?? undefined });
     const rows: (string | number | null)[][] = [[
       "Referanse", "Innsendt (UTC)", "Kunde", "Tjeneste", "Pakke", "Pris (kr, eks. mva.)", "Avtale", "Arrangement", "Dato", "Sted", "Tidsrom",
       "Status", "Kontaktperson", "E-post", "Telefon", "Beskrivelse", "Interne notater",
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     for (const i of list) {
       const s = JSON.parse(i.snapshot) as InquirySnapshot;
       rows.push([
-        i.reference, i.createdAt.toISOString(), i.customer.name, portalLabel(i.kind), s.package?.name ?? "Annet behov",
+        i.reference, i.createdAt.toISOString(), i.customer.name, kindLabel(i.kind), s.package?.name ?? "Annet behov",
         s.package && s.package.priceOre !== null ? `${formatPackagePrice(s.package).label} ${s.package.priceOre / 100}` : "",
         `${s.agreementLabel} (v${s.versionNumber})`, i.eventName, i.dateUnknown ? "Ikke avklart" : i.eventDate, i.locationUnknown ? "Ikke avklart" : i.location, i.timeframe,
         STATUS_LABELS[i.status] ?? i.status, i.contactName, i.contactEmail, i.contactPhone, i.description, i.internalNotes,

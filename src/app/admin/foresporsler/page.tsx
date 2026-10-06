@@ -3,7 +3,7 @@ import { INQUIRY_MAX, INQUIRY_PAGE, inquiryList } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
 import { formatCalendarDate, formatDateTime } from "@/lib/format";
 import { STATUS_LABELS, STATUSES, InquirySnapshot } from "@/lib/inquiry";
-import { PORTAL_KINDS, PORTALS, parsePortalKind, portalLabel } from "@/lib/portal";
+import { INQUIRY_KINDS, kindLabel } from "@/lib/service";
 import { StatusBadge } from "@/components/AdminBits";
 import { DeleteByEmailForm } from "@/components/InquiryAdminForms";
 import { emailBodyRetentionDays, inquiryRetentionMonths } from "@/server/retention";
@@ -14,7 +14,7 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
   const status = STATUSES.includes(sp.status ?? "") ? sp.status : undefined;
   const q = (sp.q ?? "").trim().slice(0, 100);
   const take = Math.min(Math.max(Number(sp.antall) || INQUIRY_PAGE, INQUIRY_PAGE), INQUIRY_MAX);
-  const kind = parsePortalKind(sp.tjeneste) ?? undefined;
+  const kind = (INQUIRY_KINDS as readonly string[]).includes(sp.tjeneste ?? "") ? sp.tjeneste : undefined;
   const filters = { status, customerId: sp.kunde || undefined, kind, failedEmail: sp.epost === "feilet", q: q || undefined };
   const { customers, list, total } = await inquiryList(filters, take);
   const params = new URLSearchParams();
@@ -52,7 +52,7 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
           <label htmlFor="tjeneste" className="field-label">Tjeneste</label>
           <select id="tjeneste" name="tjeneste" defaultValue={kind ?? ""} className="input !w-auto">
             <option value="">Alle</option>
-            {PORTAL_KINDS.map((k) => <option key={k} value={k}>{PORTALS[k].label}</option>)}
+            {INQUIRY_KINDS.map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
           </select>
         </div>
         <label className="check text-sm pb-3">
@@ -82,7 +82,7 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
                 return (
                   <tr key={i.id}>
                     <td>{i.customer.name}</td>
-                    <td>{portalLabel(i.kind)}</td>
+                    <td>{kindLabel(i.kind)}</td>
                     <td><Link className="link font-semibold" href={`/admin/foresporsler/${i.id}`}>{i.eventName}</Link><span className="block text-xs mono-num text-muted">{i.reference}</span></td>
                     <td>{i.eventDate ? formatCalendarDate(i.eventDate) : "Ikke avklart"}</td>
                     <td>{snap.package?.name ?? "Annet behov"}</td>

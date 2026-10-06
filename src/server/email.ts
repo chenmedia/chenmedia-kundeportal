@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { formatCalendarDate, formatPackagePrice } from "@/lib/format";
 import { InquirySnapshot } from "@/lib/inquiry";
-import { PORTALS } from "@/lib/portal";
+import { kindLabel } from "@/lib/service";
 import type { Inquiry } from "@prisma/client";
 import { logError } from "./log";
 
@@ -23,7 +23,7 @@ function details(i: EmailInquiry, s: InquirySnapshot): string {
     : "Usikker / annet behov";
   return [
     `Referanse: ${i.reference}`,
-    `Tjeneste: ${PORTALS[s.kind ?? "photo"].label}`,
+    `Tjeneste: ${kindLabel(s.kind ?? "photo")}`,
     `Pakke: ${pkg}`,
     `Avtale: ${s.agreementLabel} (versjon ${s.versionNumber})`,
     `Arrangement: ${i.eventName}`,
@@ -44,7 +44,7 @@ function details(i: EmailInquiry, s: InquirySnapshot): string {
 
 export function buildEmails(inq: EmailInquiry, s: InquirySnapshot, notifyTo: string): Draft[] {
   const body = details(inq, s);
-  const tjeneste = PORTALS[s.kind ?? "photo"].label;
+  const tjeneste = kindLabel(s.kind ?? "photo");
   return [
     {
       type: "team_notification",

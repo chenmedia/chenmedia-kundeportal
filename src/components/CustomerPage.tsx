@@ -1,7 +1,6 @@
-import Link from "next/link";
 import type { Content, PackageContent } from "@/lib/content";
 import { mailtoHref } from "@/lib/content";
-import { PORTALS, type PortalKind } from "@/lib/portal";
+import { SERVICES, offeredKinds, pageTexts, type ServiceKind } from "@/lib/service";
 import { formatAddonPrice, formatDate, formatPackagePrice } from "@/lib/format";
 import { Logo } from "./Logo";
 import { InquiryForm } from "./InquiryForm";
@@ -11,15 +10,14 @@ import { StickyCta } from "./StickyCta";
 import { PrintButton } from "./PrintButton";
 import { PrintTitle } from "./PrintTitle";
 import { Gallery } from "./Gallery";
+import { KindScope, KindTabs } from "./KindScope";
 import { ArrowDown, CheckIcon } from "./Icons";
 
 export interface CustomerPageProps {
   customerName: string;
-  /** Eventfoto (standard) eller eventfilm. Styrer tekster og standardverdier. */
-  kind?: PortalKind;
-  /** Faner mellom portalene til kunden. Vises bare når det er mer enn én. */
-  tabs?: { kind: PortalKind; href: string }[];
   content: Content;
+  /** Fanen som er valgt fra start når kunden har både foto og film (?tjeneste=film). */
+  initialKind?: ServiceKind | null;
   versionId: string;
   versionNumber: number;
   publishedAt: Date | null;
@@ -87,52 +85,39 @@ const steps = (contactName: string) => [
   { t: "Vi tar kontakt", d: `${contactName} avklarer tilgjengelighet og detaljer med deg.` },
 ];
 
-/** Filnavn ved «Lagre som PDF», f.eks. «Chen Media - Prisliste OBOS - Prisliste V2026». Filmportalen får «Prisliste film OBOS». */
-export function pdfTitle(customerName: string, agreementLabel: string, kind: PortalKind = "photo") {
-  const list = kind === "photo" ? `Prisliste ${customerName}` : `Prisliste ${PORTALS[kind].label.replace(/^Event/, "").toLowerCase()} ${customerName}`;
-  return ["Chen Media", list, agreementLabel].filter(Boolean).join(" - ");
+/** Filnavn ved «Lagre som PDF», f.eks. «Chen Media - Prisliste OBOS - Prisliste V2026». */
+export function pdfTitle(customerName: string, agreementLabel: string) {
+  return ["Chen Media", `Prisliste ${customerName}`, agreementLabel].filter(Boolean).join(" - ");
 }
 
 export function CustomerPage(props: CustomerPageProps) {
   const { content, customerName } = props;
-  const kind = props.kind ?? "photo";
-  const cfg = PORTALS[kind];
-  const title = content.introTitle || cfg.title(customerName);
+  const kinds = offeredKinds(content);
+  const multi = kinds.length > 1;
+  const t = pageTexts(kinds, customerName, content);
+  const title = t.title;
   const hero = content.heroImageId ? props.mediaUrl(content.heroImageId) : null;
-  const cta = content.ctaLabel || cfg.cta;
-  const tabs = props.tabs && props.tabs.length > 1 ? props.tabs : null;
+  const cta = t.cta;
+  // Tillegg som gjelder en tjeneste kunden ikke har pakker i, vises ikke
+  const addons = content.addons.filter((a) => a.appliesTo === "both" || kinds.includes(a.appliesTo));
 
-  return (
+  const page = (
     <div>
-      <PrintTitle title={pdfTitle(customerName, content.agreementLabel, kind)} />
+      <PrintTitle title={pdfTitle(customerName, content.agreementLabel)} />
       <a href="#hovedinnhold" className="skip-link">Hopp til innhold</a>
       <header className="print-head wrap flex items-center justify-between gap-4 py-6">
         <Logo height={40} />
         <p className="eyebrow text-right hidden sm:block print:block">Avtale for <span className="text-ink">{customerName}</span></p>
       </header>
 
-      {tabs && (
-        <nav aria-label="Tjenester" className="wrap no-print pb-2">
-          <ul className="flex flex-wrap gap-2">
-            {tabs.map((t) => (
-              <li key={t.kind}>
-                <Link href={t.href} className="tab" aria-current={t.kind === kind ? "page" : undefined} data-testid={`tab-${PORTALS[t.kind].slug}`}>
-                  {PORTALS[t.kind].label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      )}
-
       <main id="hovedinnhold">
         {/* Introduksjon */}
         <section id="hero" className="wrap pt-4 pb-10 md:pb-14" aria-labelledby="intro-title">
           <div className="grid gap-10 lg:gap-14 lg:grid-cols-[1.35fr_1fr] items-center">
             <div className="min-w-0">
-              <p className="eyebrow mb-5">{cfg.eyebrow} · {customerName}</p>
+              <p className="eyebrow mb-5">{t.eyebrow} · {customerName}</p>
               <h1 id="intro-title" className="display hero-title">{title}</h1>
-              <p className="ingress text-[17px] md:text-[18px] mt-6 max-w-[34rem]">{content.introText || cfg.intro}</p>
+              <p className="ingress text-[17px] md:text-[18px] mt-6 max-w-[34rem]">{t.intro}</p>
               <div className="hero-actions mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
                 <OpenFormButton label={cta} testId="open-form" />
                 <a href="#pakker" className="link font-semibold inline-flex items-center gap-1.5 min-h-[44px]">
@@ -144,7 +129,7 @@ export function CustomerPage(props: CustomerPageProps) {
             <div className="hero-media relative aspect-[16/9] lg:aspect-[4/3] rounded-[28px] overflow-hidden border border-line bg-ink">
               {hero ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={hero} fetchPriority="high" alt={content.heroImageAlt || (kind === "film" ? `Bilde fra et event filmet av Chen Media for ${customerName}` : `Bilde fra et event fotografert av Chen Media for ${customerName}`)} className="absolute inset-0 h-full w-full object-cover" />
+                <img src={hero} fetchPriority="high" alt={content.heroImageAlt || t.heroAlt} className="absolute inset-0 h-full w-full object-cover" />
               ) : (
                 <div role="img" aria-label="Plassholder for eventbilde" className="absolute inset-0">
                   {/* Krusedullen: stor og beskåret i hjørnet, 100 % hvit */}
@@ -152,7 +137,7 @@ export function CustomerPage(props: CustomerPageProps) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/brand/mark-white.png" alt="" aria-hidden="true" className="block h-auto w-full" />
                   </div>
-                  <p className="display absolute left-5 bottom-5 lg:left-6 lg:bottom-6 text-white text-xl sm:text-2xl lg:text-3xl max-w-[12ch]">{cfg.heroPlaceholder}</p>
+                  <p className="display absolute left-5 bottom-5 lg:left-6 lg:bottom-6 text-white text-xl sm:text-2xl lg:text-3xl max-w-[12ch]">{t.heroPlaceholder}</p>
                 </div>
               )}
             </div>
@@ -175,23 +160,29 @@ export function CustomerPage(props: CustomerPageProps) {
             </div>
             <p className="text-muted max-w-sm text-[15px]">Alle priser er oppgitt eks. mva. Ingen forpliktelse før du har fått bekreftelse fra oss.</p>
           </div>
-          <ul className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3 items-stretch">
-            {content.packages.map((p, i) => <PackageCard key={p.id} p={p} index={i} mediaUrl={props.mediaUrl} />)}
-          </ul>
+          {multi && <KindTabs kinds={kinds} />}
+          {kinds.map((k) => (
+            <div key={k} data-kind={multi ? k : undefined} className="kind-group mt-8">
+              {multi && <h3 className="kind-heading title text-xl mb-4">{SERVICES[k].packagesHeading}</h3>}
+              <ul className="pkg-grid grid grid-cols-1 gap-5 md:grid-cols-3 items-stretch">
+                {content.packages.filter((p) => p.kind === k).map((p, i) => <PackageCard key={p.id} p={p} index={i} mediaUrl={props.mediaUrl} />)}
+              </ul>
+            </div>
+          ))}
         </section>
 
         {/* Bilder fra oppdrag */}
         {content.gallery.length > 0 && (
           <Gallery
             items={content.gallery.map((g) => ({ id: g.id, src: props.mediaUrl(g.imageId), alt: g.alt, caption: g.caption }))}
-            title={content.galleryTitle || cfg.galleryTitle}
+            title={t.galleryTitle}
           />
         )}
 
         {/* Tillegg og praktisk */}
-        {(content.addons.length > 0 || content.practical.length > 0) && (
+        {(addons.length > 0 || content.practical.length > 0) && (
           <section className="addons-section wrap py-10 md:py-14 grid grid-cols-1 gap-5 md:grid-cols-5" aria-labelledby="tillegg-title">
-            {content.addons.length > 0 && (
+            {addons.length > 0 && (
               <div className="addons-card card min-w-0 p-5 md:p-8 md:col-span-3">
                 <p className="eyebrow mb-3">Ved behov</p>
                 <h2 id="tillegg-title" className="section-title">Tillegg</h2>
@@ -199,8 +190,8 @@ export function CustomerPage(props: CustomerPageProps) {
                   <caption className="sr-only">Tillegg og priser eks. mva.</caption>
                   <thead className="sr-only"><tr><th>Tillegg</th><th>Pris</th></tr></thead>
                   <tbody>
-                    {content.addons.map((a) => (
-                      <tr key={a.id}>
+                    {addons.map((a) => (
+                      <tr key={a.id} data-kind={multi && a.appliesTo !== "both" ? a.appliesTo : undefined}>
                         <td>
                           <span className="font-semibold break-words">{a.name}</span>
                           {a.note && <span className="block text-sm text-muted">{a.note}</span>}
@@ -295,7 +286,7 @@ export function CustomerPage(props: CustomerPageProps) {
           <div className="no-print">
             <h2 className="eyebrow eyebrow-dark">Personvern</h2>
             <p className="mt-3 text-sm text-white/85">
-              Opplysningene du sender inn i skjemaet brukes til å følge opp {cfg.needNoun} ditt hos Chen Media.
+              Opplysningene du sender inn i skjemaet brukes til å følge opp {t.needNoun} ditt hos Chen Media.
               Kontaktadressen vises slik at du kan ta kontakt direkte. Har du spørsmål om hvordan opplysningene behandles,
               kan du skrive til oss.
               {props.retentionMonths ? ` Opplysningene lagres i inntil ${props.retentionMonths} måneder etter at forespørselen er avsluttet, og du kan be oss slette dem tidligere.` : ""}
@@ -306,14 +297,14 @@ export function CustomerPage(props: CustomerPageProps) {
 
       <StickyCta label={cta} />
 
-      {/* key: skjemaet (og teksten i det) hører til én portal. Bytter kunden fane, starter skjemaet på nytt. */}
-      <RequestDialog key={kind} customerName={tabs ? `${customerName} · ${cfg.label}` : customerName}>
+      <RequestDialog customerName={customerName}>
         <InquiryForm
-          heading={cfg.formHeading}
-          showPrintUse={cfg.showPrintUse}
           token={props.token}
           versionId={props.versionId}
-          packages={content.packages.map((p) => { const pr = formatPackagePrice(p); return { id: p.id, name: p.name, custom: p.custom, priceText: `${pr.label} ${pr.amount} eks. mva.` }; })}
+          heading={t.cta}
+          showPrintUse={t.showPrintUse}
+          kinds={kinds}
+          packages={content.packages.map((p) => { const pr = formatPackagePrice(p); return { id: p.id, name: p.name, kind: p.kind, custom: p.custom, priceText: `${pr.label} ${pr.amount} eks. mva.` }; })}
           disabledReason={props.formDisabledReason}
           emailConfigured={!!props.emailConfigured}
           contactEmail={content.contactEmail}
@@ -322,4 +313,7 @@ export function CustomerPage(props: CustomerPageProps) {
       </RequestDialog>
     </div>
   );
+
+  // Med både foto og film deler fanene tilstand mellom pakkene og tilleggene, så hele siden ligger i ett omslag.
+  return multi ? <KindScope initial={props.initialKind && kinds.includes(props.initialKind) ? props.initialKind : kinds[0]}>{page}</KindScope> : page;
 }

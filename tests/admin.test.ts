@@ -6,7 +6,7 @@ import { submitInquiry } from "@/server/inquiries";
 import { csvCell, toCsv } from "@/lib/csv";
 import { STATUSES, STATUS_LABELS } from "@/lib/inquiry";
 import { contentSchema, parseContent } from "@/lib/content";
-import { draftOf, makeCustomer, makePublished, validInput } from "./helpers";
+import { makeCustomer, makePublished, validInput } from "./helpers";
 
 describe("CSV", () => {
   it("siterer felt med skilletegn, linjeskift og anførselstegn", () => {
@@ -40,6 +40,8 @@ describe("statuser", () => {
 });
 
 describe("samtidige endringer i utkastet", () => {
+  const draftOf = async (id: string) => db.customerDraft.findUniqueOrThrow({ where: { customerId: id } });
+
   it("avviser lagring når noen andre har lagret i mellomtiden, og godtar riktig forventet tidspunkt", async () => {
     const c = await makeCustomer("Samtidig AS");
     const opened = (await draftOf(c.id)).updatedAt.toISOString();
@@ -75,24 +77,24 @@ describe("samtidige endringer i utkastet", () => {
 describe("gjenopprett versjon som utkast", () => {
   it("kopierer innholdet inn i utkastet uten å røre publiserte versjoner", async () => {
     const { customer } = await makePublished("Gjenopprett AS");
-    const draft = parseContent((await draftOf(customer.id)).content);
+    const draft = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: customer.id } })).content);
     const v1Price = draft.packages[0].priceOre;
     draft.packages[0].priceOre = 777700;
     await saveDraft(customer.id, "Gjenopprett AS", draft);
     expect((await publish(customer.id)).ok).toBe(true);
-    const versionsBefore = await db.publishedVersion.findMany({ where: { portal: { customerId: customer.id } }, orderBy: { number: "asc" } });
+    const versionsBefore = await db.publishedVersion.findMany({ where: { customerId: customer.id }, orderBy: { number: "asc" } });
     expect(versionsBefore).toHaveLength(2);
 
     expect(await restoreVersionAsDraft(customer.id, 1)).toBe(true);
-    const restored = parseContent((await draftOf(customer.id)).content);
+    const restored = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: customer.id } })).content);
     expect(restored.packages[0].priceOre).toBe(v1Price);
-    expect(await db.publishedVersion.findMany({ where: { portal: { customerId: customer.id } }, orderBy: { number: "asc" } })).toEqual(versionsBefore);
+    expect(await db.publishedVersion.findMany({ where: { customerId: customer.id }, orderBy: { number: "asc" } })).toEqual(versionsBefore);
     expect(await restoreVersionAsDraft(customer.id, 99)).toBe(false);
   });
 
   it("holder seg til kundens eget navn, ikke navnet versjonen hadde", async () => {
     const { customer } = await makePublished("Gammelt navn");
-    const draft = parseContent((await draftOf(customer.id)).content);
+    const draft = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: customer.id } })).content);
     await saveDraft(customer.id, "Nytt navn", draft);
     await restoreVersionAsDraft(customer.id, 1);
     expect((await db.customer.findUniqueOrThrow({ where: { id: customer.id } })).name).toBe("Nytt navn");

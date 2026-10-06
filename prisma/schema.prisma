@@ -40,50 +40,36 @@ model Customer {
   contactPhone     String?
   tokenHash        String           @unique
   tokenEnc         String
+  currentVersionId String?          @unique
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
-  portals          Portal[]
+  draft            CustomerDraft?
+  versions         PublishedVersion[] @relation("CustomerVersions")
+  currentVersion   PublishedVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
   inquiries        Inquiry[]
   assets           MediaAsset[]
 }
 
-/// En kundeportal (tjeneste) hos en kunde: eventfoto eller eventfilm. Kunden har én lenke og kan ha begge.
-/// Hver portal har eget utkast, egne publiserte versjoner og egen aktiv versjon.
-model Portal {
-  id               String             @id @default(cuid())
-  customerId       String
-  customer         Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  kind             String // photo | film
-  currentVersionId String?            @unique
-  createdAt        DateTime           @default(now())
-  draft            PortalDraft?
-  versions         PublishedVersion[] @relation("PortalVersions")
-  currentVersion   PublishedVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
-
-  @@unique([customerId, kind])
-}
-
-model PortalDraft {
-  portalId  String   @id
-  portal    Portal   @relation(fields: [portalId], references: [id], onDelete: Cascade)
-  content   String
-  updatedAt DateTime @updatedAt
+model CustomerDraft {
+  customerId String   @id
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  content    String
+  updatedAt  DateTime @updatedAt
 }
 
 model PublishedVersion {
   id           String    @id @default(cuid())
-  portalId     String
-  portal       Portal    @relation("PortalVersions", fields: [portalId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     Customer  @relation("CustomerVersions", fields: [customerId], references: [id], onDelete: Cascade)
   number       Int
   customerName String
   label        String
   content      String
   publishedAt  DateTime  @default(now())
-  currentFor   Portal?   @relation("CurrentVersion")
+  currentFor   Customer? @relation("CurrentVersion")
   inquiries    Inquiry[]
 
-  @@unique([portalId, number])
-  @@index([portalId])
+  @@unique([customerId, number])
 }
 
 model Inquiry {
@@ -93,7 +79,7 @@ model Inquiry {
   customer       Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
   versionId      String
   version        PublishedVersion @relation(fields: [versionId], references: [id])
-  kind           String           @default("photo") // photo | film (portalen forespørselen kom fra)
+  kind           String           @default("photo") // photo | film | both (tjenesten forespørselen gjelder)
   packageId      String // pakke-ID eller "other"
   snapshot       String // JSON: kundenavn, pakke, tillegg, vilkår slik kunden så dem
   eventName      String

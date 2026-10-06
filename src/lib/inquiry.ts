@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isEmail, type AddonContent, type PackageContent } from "./content";
 import { todayInOslo } from "./format";
-import type { PortalKind } from "./portal";
+import { INQUIRY_KINDS, type InquiryKind } from "./service";
 
 export const inquiryInputSchema = z
   .object({
@@ -16,6 +16,8 @@ export const inquiryInputSchema = z
     contactName: z.string().trim().min(2, "Skriv minst 2 tegn.").max(100, "Maks 100 tegn."),
     contactEmail: z.string().trim().refine(isEmail, "Skriv en gyldig e-postadresse, for eksempel navn@firma.no."),
     contactPhone: z.string().trim().max(40, "Maks 40 tegn.").default(""),
+    /** Gjelder foto, film eller begge. Brukes bare når ingen pakke er valgt og kunden har både foto og film. */
+    service: z.enum(INQUIRY_KINDS).default("both"),
     express: z.boolean().default(false),
     printUse: z.boolean().default(false),
   })
@@ -46,8 +48,8 @@ export const STATUS_LABELS: Record<string, string> = {
 export const STATUSES = Object.keys(STATUS_LABELS);
 
 export interface InquirySnapshot {
-  /** Portalen forespørselen kom fra. Eldre forespørsler mangler feltet (de er alle eventfoto). */
-  kind?: PortalKind;
+  /** Tjenesten forespørselen gjelder. Eldre forespørsler mangler feltet (de er alle eventfoto). */
+  kind?: InquiryKind;
   customerName: string;
   agreementLabel: string;
   versionNumber: number;

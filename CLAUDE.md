@@ -1,6 +1,6 @@
 # Chen Media Kundepriser
 
-Digitale kundeprislister for eventfoto og eventfilm. Kunden får én hemmelig lenke (`/k/<token>`), ser pakker og priser (én fane per portal), og sender en forespørsel. Administrator (Chen Media) styrer alt under `/admin`. Se `README.md` for oppsett, miljøvariabler og drift.
+Digitale kundeprislister for eventfoto og eventfilm. Kunden får én hemmelig lenke (`/k/<token>`), ser pakker og priser (foto og/eller film), og sender en forespørsel. Administrator (Chen Media) styrer alt under `/admin`. Se `README.md` for oppsett, miljøvariabler og drift.
 
 ## Struktur og regler
 
@@ -11,16 +11,15 @@ Digitale kundeprislister for eventfoto og eventfilm. Kunden får én hemmelig le
   - `customers.ts`, `inquiries.ts` skriving og regler (publisering, innsending, tilgang)
   - `email.ts`, `storage.ts`, `media.ts`, `supabase-auth.ts` adaptere mot eksterne tjenester
   - `log.ts` feillogging uten personopplysninger. Bruk `logError` i alle serverfeil-stier
-- `src/lib/` ren logikk uten databasetilgang: `content.ts` (innholdsmodell og publiseringskrav), `portal.ts` (portaltyper foto/film: tekster og standardverdier), `format.ts` (priser og datoer), `inquiry.ts` (skjema og statuser).
+- `src/lib/` ren logikk uten databasetilgang: `content.ts` (innholdsmodell og publiseringskrav), `service.ts` (tjenestene foto/film: tekster og standardverdier), `format.ts` (priser og datoer), `inquiry.ts` (skjema og statuser).
 - `prisma/migrations/` skjemaendringer. Endringer må kjøres mot Supabase før koden som trenger dem slås sammen.
 
-## Portaler (eventfoto og eventfilm)
+## Eventfoto og eventfilm
 
-- En `Customer` er bedriften: navn, kontaktperson, én lenke, aktiv/deaktivert og bildebibliotek. En `Portal` (`kind` = `photo` | `film`) er en tjeneste hos kunden og har eget utkast (`PortalDraft`), egne versjoner (`PublishedVersion`) og egen aktiv versjon. Maks én portal per type per kunde.
-- Kundesiden viser faner (`?tjeneste=foto|film`) når kunden har mer enn én publisert portal. Ukjent eller upublisert fane gir den første publiserte, aldri 404 på en gyldig lenke.
-- Innholdsmodellen (`content.ts`) er felles. Det som skiller portalene ligger i `PORTALS` i `src/lib/portal.ts` (tittel, knappetekst, hint i editoren). Ny portaltype: legg den til der.
-- Forespørsler lagrer `kind` og versjonen de kom fra. `submitInquiry` finner portalen via `versionId`, og pris og pakke hentes fra den portalens publiserte innhold.
-- `saveDraft`, `publish` og `restoreVersionAsDraft` tar `kind` (standard `photo`). Send alltid `kind` eksplisitt fra admin-kode.
+- Kunden har én side og én lenke. Hver **pakke** har en `kind` (`photo` | `film`), og hvert **tillegg** en `appliesTo` (`photo` | `film` | `both`). Begge ligger i innholds-JSON-en, så ingen databasemigrering trengs for å utvide dem, og innhold lagret før film fantes leses som eventfoto.
+- Har kunden pakker av begge typer, viser kundesiden faner (Eventfoto | Eventfilm, `KindScope`). Den andre tjenestens pakker og tillegg skjules bare på skjerm. Utskrift og PDF viser alt. `?tjeneste=film` åpner filmfanen.
+- Tekster (tittel, introduksjon, knapp, hint i editoren) avhenger av hvilke tjenester kunden har pakker i og ligger i `src/lib/service.ts` (`pageTexts`, `defaultTexts`). Det admin har skrevet gjelder alltid. Ny tjeneste: legg den til i `SERVICES` og `TEXTS` der.
+- Forespørsler lagrer `kind` (`photo` | `film` | `both`). Tjenesten følger pakken kunden valgte. Uten pakke avgjør kundens valg, men bare når siden har begge tjenestene. Det avgjøres på serveren (`submitInquiry`), aldri fra skjemaet alene.
 
 ## Domeneregler som ikke skal brytes
 
@@ -28,7 +27,7 @@ Digitale kundeprislister for eventfoto og eventfilm. Kunden får én hemmelig le
 - Publiserte versjoner er uforanderlige. Forespørsler lagrer et øyeblikksbilde av pris og innhold.
 - Pris og kunde hentes alltid fra publisert innhold på serveren, aldri fra skjemaet.
 - Kundelenken lagres som SHA-256-hash (pluss kryptert kopi for «Kopier lenke»). Logg aldri tokens, komplette lenker, passord eller skjemadata.
-- Ugyldig, deaktivert og upublisert lenke (ingen publisert portal) skal gi identisk nøytral 404.
+- Ugyldig, deaktivert og upublisert lenke skal gi identisk nøytral 404.
 - Kunder logger aldri inn. Bare administratorer (Supabase Auth i drift, godkjenningsliste i `AdminUser`).
 
 ## Kommandoer

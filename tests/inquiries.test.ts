@@ -5,7 +5,7 @@ import { submitInquiry } from "@/server/inquiries";
 import { parseContent } from "@/lib/content";
 import { todayInOslo } from "@/lib/format";
 import { inquiryInputSchema, InquirySnapshot } from "@/lib/inquiry";
-import { draftOf, makePublished, validInput } from "./helpers";
+import { makePublished, validInput } from "./helpers";
 import { processJob } from "@/server/email";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
@@ -31,7 +31,7 @@ describe("forespørsel og prisøyeblikksbilde", () => {
   it("gammel forespørsel beholder gammel pris etter ny publisering", async () => {
     const { customer, token, versionId } = await makePublished("Historisk AS");
     await submitInquiry({ token, versionId, idempotencyKey: "hist-key-0000000001", input: validInput() });
-    const draft = parseContent((await draftOf(customer.id)).content);
+    const draft = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: customer.id } })).content);
     draft.packages[0].priceOre = 999900;
     await saveDraft(customer.id, "Historisk AS", draft);
     await publish(customer.id);

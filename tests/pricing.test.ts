@@ -49,14 +49,14 @@ describe("publiseringskrav for pris", () => {
 
   it("advarer om prosenttillegg over 100 % og tillegg til 0 kr", () => {
     const c = base();
-    c.addons.push({ id: "x", name: "Rush", basis: "percent", amountOre: null, percent: 150, note: "" });
-    c.addons.push({ id: "y", name: "Gratis", basis: "one_time", amountOre: 0, percent: null, note: "" });
+    c.addons.push({ id: "x", name: "Rush", basis: "percent", amountOre: null, percent: 150, note: "", appliesTo: "both" });
+    c.addons.push({ id: "y", name: "Gratis", basis: "one_time", amountOre: 0, percent: null, note: "", appliesTo: "both" });
     const w = publishWarnings(c).join();
     expect(w).toMatch(/Rush: prosenttillegget er over 100/);
     expect(w).toMatch(/Gratis: beløpet er 0 kr/);
   });
 
   it("viser prosent med komma", () => {
-    expect(formatAddonPrice({ id: "x", name: "A", basis: "percent", amountOre: null, percent: 12.5, note: "" })).toContain("12,5");
+    expect(formatAddonPrice({ id: "x", name: "A", basis: "percent", amountOre: null, percent: 12.5, note: "", appliesTo: "both" })).toContain("12,5");
   });
 });

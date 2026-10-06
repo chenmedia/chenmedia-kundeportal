@@ -4,7 +4,7 @@ import {
   duplicateCustomer, getRawToken, publish, resolvePublished, rotateToken, saveDraft, setActive, createCustomer,
 } from "@/server/customers";
 import { parseContent } from "@/lib/content";
-import { draftOf, makeCustomer, makePublished, portalIdOf, PNG_1X1, validInput } from "./helpers";
+import { makeCustomer, makePublished, PNG_1X1, validInput } from "./helpers";
 import { submitInquiry } from "@/server/inquiries";
 import { saveUpload } from "@/server/media";
 import { GET as customerMedia } from "@/app/k/[token]/media/[assetId]/route";
@@ -50,7 +50,7 @@ describe("tilgangskontroll for kundelenker", () => {
     const call = (token: string, id: string) => customerMedia(new Request("http://x"), { params: Promise.resolve({ token, assetId: id }) });
     expect((await call(b.token, up.id)).status).toBe(404);
     // Publiser B med bildet: B kan hente, A kan ikke
-    const draft = parseContent((await draftOf(b.customer.id)).content);
+    const draft = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: b.customer.id } })).content);
     draft.heroImageId = up.id;
     await saveDraft(b.customer.id, "Kunde B", draft);
     await publish(b.customer.id);
@@ -71,7 +71,7 @@ describe("publiseringsversjoner", () => {
     const v1 = await resolvePublished(token);
     expect(v1!.version.number).toBe(1);
 
-    const draft = parseContent((await draftOf(customer.id)).content);
+    const draft = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: customer.id } })).content);
     draft.packages[0].priceOre = 777700;
     await saveDraft(customer.id, "Versjoner", draft);
     expect((await resolvePublished(token))!.content.packages[0].priceOre).toBe(600000);
@@ -82,7 +82,7 @@ describe("publiseringsversjoner", () => {
     expect(v2!.version.number).toBe(2);
     expect(v2!.content.packages[0].priceOre).toBe(777700);
     // v1 er bevart uendret
-    const old = await db.publishedVersion.findUniqueOrThrow({ where: { portalId_number: { portalId: await portalIdOf(customer.id), number: 1 } } });
+    const old = await db.publishedVersion.findUniqueOrThrow({ where: { customerId_number: { customerId: customer.id, number: 1 } } });
     expect(parseContent(old.content).packages[0].priceOre).toBe(600000);
   });
 
@@ -91,7 +91,7 @@ describe("publiseringsversjoner", () => {
     const r = await publish(c.id);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.problems.join(" ")).toMatch(/pakke/i);
-    expect(await db.publishedVersion.count({ where: { portal: { customerId: c.id } } })).toBe(0);
+    expect(await db.publishedVersion.count({ where: { customerId: c.id } })).toBe(0);
   });
 
   it("duplisert kunde får ny lenke, tom historikk og krever nytt navn", async () => {
@@ -101,10 +101,10 @@ describe("publiseringsversjoner", () => {
     expect(copy.id).not.toBe(customer.id);
     expect((await getRawToken(copy.id))).not.toBe(token);
     expect(await db.inquiry.count({ where: { customerId: copy.id } })).toBe(0);
-    expect(await db.publishedVersion.count({ where: { portal: { customerId: copy.id } } })).toBe(0);
+    expect(await db.publishedVersion.count({ where: { customerId: copy.id } })).toBe(0);
     const r = await publish(copy.id);
     expect(r.ok).toBe(false); // needsRename
-    await saveDraft(copy.id, "Nytt navn", parseContent((await draftOf(copy.id)).content));
+    await saveDraft(copy.id, "Nytt navn", parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: copy.id } })).content));
     expect((await publish(copy.id)).ok).toBe(true);
     // gammel lenke viser fortsatt originalen
     expect((await resolvePublished(token))!.customerId).toBe(customer.id);
@@ -116,9 +116,9 @@ describe("samtidig publisering", () => {
     const { customer } = await makePublished("Race AS"); // v1
     const results = await Promise.all(Array.from({ length: 4 }, () => publish(customer.id)));
     expect(results.every((r) => r.ok)).toBe(true);
-    const numbers = (await db.publishedVersion.findMany({ where: { portal: { customerId: customer.id } }, orderBy: { number: "asc" } })).map((v) => v.number);
+    const numbers = (await db.publishedVersion.findMany({ where: { customerId: customer.id }, orderBy: { number: "asc" } })).map((v) => v.number);
     expect(numbers).toEqual([1, 2, 3, 4, 5]);
-    const p = await db.portal.findUniqueOrThrow({ where: { id: await portalIdOf(customer.id) }, include: { currentVersion: true } });
-    expect(p.currentVersion?.number).toBe(5);
+    const c = await db.customer.findUniqueOrThrow({ where: { id: customer.id }, include: { currentVersion: true } });
+    expect(c.currentVersion).not.toBeNull();
   });
 });

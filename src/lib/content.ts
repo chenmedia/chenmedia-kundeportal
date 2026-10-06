@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { PORTALS, type PortalKind } from "./portal";
+import { INQUIRY_KINDS, SERVICE_KINDS } from "./service";
 
 /** Priser lagres som heltall i øre. */
-export const MAX_PACKAGES = 6;
+export const MAX_PACKAGES = 12; // inntil 6 per tjeneste vises pent som en rad av kort
 export const MAX_GALLERY = 6;
 
 const optionalText = (max: number) => z.string().trim().max(max).default("");
@@ -10,6 +10,8 @@ const optionalText = (max: number) => z.string().trim().max(max).default("");
 const packageSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().max(80).default(""),
+  /** Tjenesten pakken gjelder: eventfoto (standard, også for innhold publisert før film ble lagt til) eller eventfilm */
+  kind: z.enum(SERVICE_KINDS).default("photo"),
   priceType: z.enum(["fixed", "from"]).default("fixed"),
   priceOre: z.number().int().min(0).nullable().default(null),
   /** Forklaring, påkrevd for fra-pris */
@@ -43,6 +45,8 @@ const addonSchema = z.object({
   amountOre: z.number().int().min(0).nullable().default(null),
   percent: z.number().min(0).max(1000).nullable().default(null),
   note: optionalText(300),
+  /** Vises for foto, film eller begge (standard) */
+  appliesTo: z.enum(INQUIRY_KINDS).default("both"),
 });
 export type AddonContent = z.infer<typeof addonSchema>;
 
@@ -57,7 +61,7 @@ const galleryItemSchema = z.object({
 export type GalleryItem = z.infer<typeof galleryItemSchema>;
 
 export const contentSchema = z.object({
-  introTitle: optionalText(150), // tomt = standardtittel for portalen, f.eks. «Eventfotografering for [kunde]»
+  introTitle: optionalText(150), // tomt = «Eventfotografering for [kunde]»
   introText: z.string().trim().max(800).default(""),
   ctaLabel: optionalText(60),
   heroImageId: z.string().nullable().default(null),
@@ -66,7 +70,7 @@ export const contentSchema = z.object({
   validityText: optionalText(200),
   contactName: optionalText(100),
   contactEmail: optionalText(200),
-  galleryTitle: optionalText(80), // tomt = standardtittel for portalen, f.eks. «Bilder fra oppdrag»
+  galleryTitle: optionalText(80), // tomt = «Bilder fra oppdrag»
   gallery: z.array(galleryItemSchema).max(MAX_GALLERY).default([]),
   packages: z.array(packageSchema).max(MAX_PACKAGES).default([]),
   addons: z.array(addonSchema).max(30).default([]),
@@ -95,8 +99,9 @@ export function newId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function emptyContent(kind: PortalKind = "photo"): Content {
-  return contentSchema.parse({ introText: PORTALS[kind].intro, ctaLabel: PORTALS[kind].cta });
+/** Tomt innhold. Tittel, introduksjon og knappetekst står tomme og får standardtekster ut fra tjenestene kunden tilbyr (service.ts). */
+export function emptyContent(): Content {
+  return contentSchema.parse({});
 }
 
 export function parseContent(json: string): Content {
@@ -136,11 +141,12 @@ export function publishProblems(content: Content, customerName: string, needsRen
     if (pk.priceType === "from" && !pk.priceNote.trim() && !pk.description.trim())
       p.push(`${n}: fra-pris krever en forklarende tekst.`);
   });
+  // Samme navn går an på en fotopakke og en filmpakke, men ikke to ganger i samme tjeneste.
   const seen = new Set<string>();
   const reported = new Set<string>();
   for (const pk of content.packages) {
     const nm = pk.name.trim();
-    const key = nm.toLowerCase();
+    const key = `${pk.kind}:${nm.toLowerCase()}`;
     if (!nm) continue;
     if (seen.has(key) && !reported.has(key)) { p.push(`To pakker heter «${nm}». Gi dem ulike navn.`); reported.add(key); }
     seen.add(key);

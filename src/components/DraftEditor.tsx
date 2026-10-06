@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddonContent, Content, MAX_GALLERY, MAX_PACKAGES, PackageContent, addonBasis, addonBasisLabels, newId } from "@/lib/content";
 import { saveDraftAction } from "@/app/admin/actions";
-import { PORTALS, type PortalKind } from "@/lib/portal";
+import { DEFAULT_GALLERY_TITLE, SERVICES, defaultTexts, kindLabel, offeredKinds, type InquiryKind, type ServiceKind } from "@/lib/service";
 import { formatKr, parseKroner } from "@/lib/format";
 import { useEditorState } from "./EditorState";
 
@@ -115,8 +115,6 @@ function RowButtons({ i, len, onMove, onRemove, what }: { i: number; len: number
 
 export function DraftEditor(props: {
   customerId: string;
-  /** Portalen (eventfoto/eventfilm) utkastet tilhører. Siden må remontere editoren (key) når den byttes. */
-  kind: PortalKind;
   initialName: string;
   needsRename: boolean;
   initialContent: Content;
@@ -124,9 +122,9 @@ export function DraftEditor(props: {
   draftUpdatedAt: string | null;
   assets: Asset[];
 }) {
-  const cfg = PORTALS[props.kind];
   const [name, setName] = useState(props.initialName);
   const [c, setC] = useState<Content>(props.initialContent);
+  const defaults = defaultTexts(offeredKinds(c), name || "[kunde]");
   const [assets, setAssets] = useState<Asset[]>(props.assets);
   const saved = useRef(JSON.stringify([props.initialName, props.initialContent]));
   const [dirty, setDirty] = useState(false);
@@ -164,7 +162,7 @@ export function DraftEditor(props: {
   async function save(overwrite = false) {
     setSaving(true); setStatus(null); setConflict(false);
     try {
-      const r = await saveDraftAction(props.customerId, props.kind, name, JSON.stringify(c), overwrite ? null : expectedAt.current);
+      const r = await saveDraftAction(props.customerId, name, JSON.stringify(c), overwrite ? null : expectedAt.current);
       if (r.ok) {
         saved.current = snapshot; setDirty(false);
         if (r.updatedAt) expectedAt.current = r.updatedAt;
@@ -253,9 +251,9 @@ export function DraftEditor(props: {
             <p id="rename-h" className="field-error">Dette er en duplisert kunde. Gi den et nytt navn før første publisering.</p>
           )}
         </div>
-        <Text id="intro-title" label="Tittel (valgfritt)" value={c.introTitle} max={150} onChange={(v) => patch({ introTitle: v })} hint={`La stå tom for standardtittelen «${cfg.title(name || "[kunde]")}».`} />
-        <Text id="intro-text" label="Introduksjonstekst" area value={c.introText} max={800} onChange={(v) => patch({ introText: v })} />
-        <Text id="cta" label="Tekst på hovedknappen" value={c.ctaLabel} max={60} onChange={(v) => patch({ ctaLabel: v })} hint={`Standard: «${cfg.cta}».`} />
+        <Text id="intro-title" label="Tittel (valgfritt)" value={c.introTitle} max={150} onChange={(v) => patch({ introTitle: v })} hint={`La stå tom for standardtittelen «${defaults.title}». Den følger pakketypene (foto, film eller begge).`} />
+        <Text id="intro-text" label="Introduksjonstekst" area value={c.introText} max={800} onChange={(v) => patch({ introText: v })} hint="La stå tom for standardtekst som passer pakketypene." />
+        <Text id="cta" label="Tekst på hovedknappen" value={c.ctaLabel} max={60} onChange={(v) => patch({ ctaLabel: v })} hint={`Standard: «${defaults.cta}».`} />
         <div className="grid gap-5 sm:grid-cols-2">
           <Text id="agr" label="Avtaleetikett" value={c.agreementLabel} max={60} onChange={(v) => patch({ agreementLabel: v })} hint="Eksempel: «Prisliste V2026». Påkrevd for publisering." />
           <Text id="valid" label="Gyldighetstekst (valgfritt)" value={c.validityText} max={200} onChange={(v) => patch({ validityText: v })} hint="Vises nederst på kundesiden, under avtaleversjonen. La stå tom hvis det ikke gjelder." />
@@ -307,7 +305,7 @@ export function DraftEditor(props: {
             <p className="text-sm text-muted mt-1">Vises mellom pakkene og tilleggene. Oppsettet tilpasses antall bilder: ett bilde blir en bred banner, tre og fem gir ett stort bilde med mindre ved siden av, ellers et rutenett.</p>
           </div>
           {c.gallery.length > 0 && (
-            <Text id="gal-title" label="Overskrift (valgfritt)" value={c.galleryTitle} max={80} onChange={(v) => patch({ galleryTitle: v })} hint={`Standard: «${cfg.galleryTitle}».`} />
+            <Text id="gal-title" label="Overskrift (valgfritt)" value={c.galleryTitle} max={80} onChange={(v) => patch({ galleryTitle: v })} hint={`Standard: «${DEFAULT_GALLERY_TITLE}».`} />
           )}
           {c.gallery.map((g, i) => (
             <fieldset key={g.id} className="border border-line rounded-2xl p-4 grid gap-3">
@@ -328,13 +326,20 @@ export function DraftEditor(props: {
         </div>
       </Section>
 
-      <Section id="s-pakker" title={`Pakker (${c.packages.length}/${MAX_PACKAGES})`} intro="Priser oppgis i kroner eks. mva. Feltene for tid, leveranse, bruksrett og levering fylles bare ut hvis det er avtalt.">
+      <Section id="s-pakker" title={`Pakker (${c.packages.length}/${MAX_PACKAGES})`} intro="Hver pakke er enten eventfoto eller eventfilm. Har kunden begge, får kunden faner på siden. Priser oppgis i kroner eks. mva. Feltene for tid, leveranse, bruksrett og levering fylles bare ut hvis det er avtalt.">
         {c.packages.length === 0 && <p className="text-muted">Ingen pakker ennå.</p>}
         {c.packages.map((p, i) => (
           <fieldset key={p.id} className="border border-line rounded-2xl p-5 grid gap-4">
-            <legend className="title px-2">Pakke {i + 1}{p.name ? `: ${p.name}` : ""}</legend>
+            <legend className="title px-2">Pakke {i + 1} · {kindLabel(p.kind)}{p.name ? `: ${p.name}` : ""}</legend>
             <div className="grid gap-4 sm:grid-cols-2">
               <Text id={`p${i}-name`} label="Pakkenavn" value={p.name} max={80} onChange={(v) => patchPkg(i, { name: v })} />
+              <div>
+                <label htmlFor={`p${i}-kind`} className="field-label">Tjeneste</label>
+                <select id={`p${i}-kind`} className="input" value={p.kind} onChange={(e) => patchPkg(i, { kind: e.target.value as ServiceKind })}>
+                  <option value="photo">{SERVICES.photo.label}</option>
+                  <option value="film">{SERVICES.film.label}</option>
+                </select>
+              </div>
               <PriceInput id={`p${i}-price`} label="Pris (kr, eks. mva.)" valueOre={p.priceOre} onChange={(o) => patchPkg(i, { priceOre: o })} />
               <div>
                 <label htmlFor={`p${i}-type`} className="field-label">Pristype</label>
@@ -355,20 +360,24 @@ export function DraftEditor(props: {
               {p.imageId && <Text id={`p${i}-photo-alt`} label="Beskrivelse av pakkebildet" value={p.imageAlt} max={200} onChange={(v) => patchPkg(i, { imageAlt: v })} hint="For skjermlesere. La stå tom hvis bildet bare er pynt." />}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Text id={`p${i}-cov`} label="Dekningstid" value={p.coverage} max={120} onChange={(v) => patchPkg(i, { coverage: v })} hint={cfg.editor.coverageHint} />
-              <Text id={`p${i}-img`} label={cfg.editor.deliverableLabel} value={p.images} max={120} onChange={(v) => patchPkg(i, { images: v })} hint={cfg.editor.deliverableHint} />
-              <Text id={`p${i}-use`} label="Bruksrett" value={p.usage} max={120} onChange={(v) => patchPkg(i, { usage: v })} hint={cfg.editor.usageHint} />
-              <Text id={`p${i}-del`} label="Levering" value={p.delivery} max={120} onChange={(v) => patchPkg(i, { delivery: v })} hint={cfg.editor.deliveryHint} />
+              <Text id={`p${i}-cov`} label="Dekningstid" value={p.coverage} max={120} onChange={(v) => patchPkg(i, { coverage: v })} hint={SERVICES[p.kind].editor.coverageHint} />
+              <Text id={`p${i}-img`} label={SERVICES[p.kind].editor.deliverableLabel} value={p.images} max={120} onChange={(v) => patchPkg(i, { images: v })} hint={SERVICES[p.kind].editor.deliverableHint} />
+              <Text id={`p${i}-use`} label="Bruksrett" value={p.usage} max={120} onChange={(v) => patchPkg(i, { usage: v })} hint={SERVICES[p.kind].editor.usageHint} />
+              <Text id={`p${i}-del`} label="Levering" value={p.delivery} max={120} onChange={(v) => patchPkg(i, { delivery: v })} hint={SERVICES[p.kind].editor.deliveryHint} />
             </div>
             <RowButtons i={i} len={c.packages.length} what={`pakke ${i + 1}`}
               onMove={(d) => patch({ packages: move(c.packages, i, d) })}
               onRemove={() => { if (confirm(`Fjerne «${p.name || `pakke ${i + 1}`}» fra utkastet?`)) patch({ packages: c.packages.filter((_, n) => n !== i) }); }} />
           </fieldset>
         ))}
-        <button type="button" className="btn btn-outline btn-sm self-start" disabled={c.packages.length >= MAX_PACKAGES}
-          onClick={() => patch({ packages: [...c.packages, { id: newId("pkg"), name: "", priceType: "fixed", priceOre: null, priceNote: "", description: "", coverage: "", images: "", usage: "", delivery: "", custom: false, imageId: null, imageAlt: "" }] })}>
-          + Legg til pakke
-        </button>
+        <div className="flex flex-wrap gap-3">
+          {(["photo", "film"] as const).map((k) => (
+            <button key={k} type="button" className="btn btn-outline btn-sm" disabled={c.packages.length >= MAX_PACKAGES}
+              onClick={() => patch({ packages: [...c.packages, { id: newId("pkg"), kind: k, name: "", priceType: "fixed", priceOre: null, priceNote: "", description: "", coverage: "", images: "", usage: "", delivery: "", custom: false, imageId: null, imageAlt: "" }] })}>
+              + Legg til {k === "photo" ? "fotopakke" : "filmpakke"}
+            </button>
+          ))}
+        </div>
         {c.packages.length >= MAX_PACKAGES && <p className="field-hint">Maks {MAX_PACKAGES} pakker per kundeside.</p>}
       </Section>
 
@@ -377,7 +386,18 @@ export function DraftEditor(props: {
         {c.addons.map((a, i) => (
           <fieldset key={a.id} className="border border-line rounded-2xl p-5 grid gap-4">
             <legend className="title px-2">Tillegg {i + 1}{a.name ? `: ${a.name}` : ""}</legend>
-            <Text id={`a${i}-name`} label="Navn" value={a.name} max={120} onChange={(v) => patchAddon(i, { name: v })} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Text id={`a${i}-name`} label="Navn" value={a.name} max={120} onChange={(v) => patchAddon(i, { name: v })} />
+              <div>
+                <label htmlFor={`a${i}-for`} className="field-label">Gjelder</label>
+                <select id={`a${i}-for`} className="input" value={a.appliesTo} onChange={(e) => patchAddon(i, { appliesTo: e.target.value as InquiryKind })}>
+                  <option value="both">Foto og film</option>
+                  <option value="photo">{SERVICES.photo.label}</option>
+                  <option value="film">{SERVICES.film.label}</option>
+                </select>
+                <p className="field-hint">Vises bare under den fanen kunden ser, og alltid i utskrift.</p>
+              </div>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor={`a${i}-basis`} className="field-label">Prisgrunnlag</label>
@@ -404,7 +424,7 @@ export function DraftEditor(props: {
           </fieldset>
         ))}
         <button type="button" className="btn btn-outline btn-sm self-start"
-          onClick={() => patch({ addons: [...c.addons, { id: newId("add"), name: "", basis: "one_time", amountOre: null, percent: null, note: "" }] })}>
+          onClick={() => patch({ addons: [...c.addons, { id: newId("add"), name: "", basis: "one_time", amountOre: null, percent: null, note: "", appliesTo: "both" }] })}>
           + Legg til tillegg
         </button>
       </Section>
