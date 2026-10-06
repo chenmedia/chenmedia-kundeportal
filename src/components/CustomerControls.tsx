@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmButton } from "./ConfirmButton";
+import { useEditorState } from "./EditorState";
 import { publishAction, rotateTokenAction, setActiveAction, duplicateAction, type ActionState } from "@/app/admin/actions";
 
 interface Props {
@@ -13,9 +14,12 @@ interface Props {
   published: boolean;
   differs: boolean;
   versionNumber: number | null;
+  /** Advarsler om det lagrede utkastet (f.eks. svært lave priser) som admin må bekrefte. */
+  warnings?: string[];
 }
 
-export function CustomerControls({ customerId, link, active, published, differs, versionNumber }: Props) {
+export function CustomerControls({ customerId, link, active, published, differs, versionNumber, warnings = [] }: Props) {
+  const { dirty } = useEditorState();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionState | null>(null);
@@ -43,10 +47,12 @@ export function CustomerControls({ customerId, link, active, published, differs,
         <p className="text-sm">
           {!published ? "Utkastet er ikke publisert." : differs ? "Utkastet avviker fra den publiserte versjonen." : `Utkastet er likt aktiv versjon v${versionNumber}.`}
         </p>
-        <p className="text-sm text-muted">Husk å trykke «Lagre utkast» først. Publisering bruker det lagrede utkastet.</p>
+        <p className="text-sm text-muted">Publisering bruker det lagrede utkastet.</p>
+        {dirty && <p role="status" className="text-sm font-semibold text-err">Du har ulagrede endringer. Lagre utkastet før du publiserer.</p>}
         <Link className="btn btn-outline btn-sm" href={`/admin/kunder/${customerId}/forhandsvisning`} target="_blank">Forhåndsvis utkast</Link>
-        <button className="btn btn-accent" disabled={pending} onClick={() => {
-          if (!confirm("Publisere utkastet? Det oppdaterer kundens aktive lenke.")) return;
+        <button className="btn btn-accent" disabled={pending || dirty || (published && !differs)} onClick={() => {
+          const check = warnings.length ? `\n\nSjekk dette først:\n${warnings.map((w) => `• ${w}`).join("\n")}` : "";
+          if (!confirm(`Publisere utkastet? Det oppdaterer kundens aktive lenke.${check}`)) return;
           run(() => publishAction(customerId), "Publisert. Kundelenken viser nå den nye versjonen.");
         }}>{pending ? "Jobber …" : "Publiser"}</button>
         {result?.error && (

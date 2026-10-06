@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { customerForEditor } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
-import { canonical, emptyContent, parseContent } from "@/lib/content";
+import { canonical, emptyContent, parseContent, publishWarnings } from "@/lib/content";
 import { formatDateTime } from "@/lib/format";
 import { getAdminCustomerLink } from "@/server/customers";
 import { DraftEditor } from "@/components/DraftEditor";
 import { CustomerControls } from "@/components/CustomerControls";
+import { EditorStateProvider } from "@/components/EditorState";
 import { CompanyContactCard } from "@/components/CompanyContactCard";
 
 export default async function CustomerEditPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ gjenopprettet?: string }> }) {
@@ -41,6 +42,7 @@ export default async function CustomerEditPage({ params, searchParams }: { param
 
       <CompanyContactCard customerId={c.id} contact={{ contactName: c.contactName, contactEmail: c.contactEmail, contactPhone: c.contactPhone }} />
 
+      <EditorStateProvider>
       <div className="grid gap-6 lg:grid-cols-[1fr_320px] items-start">
         <DraftEditor
           customerId={c.id}
@@ -57,8 +59,10 @@ export default async function CustomerEditPage({ params, searchParams }: { param
           published={!!c.currentVersion}
           differs={differs}
           versionNumber={c.currentVersion?.number ?? null}
+          warnings={publishWarnings(content)}
         />
       </div>
+      </EditorStateProvider>
     </div>
   );
 }

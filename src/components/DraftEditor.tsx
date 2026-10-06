@@ -3,20 +3,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddonContent, Content, DEFAULT_CTA, DEFAULT_GALLERY_TITLE, MAX_GALLERY, MAX_PACKAGES, PackageContent, addonBasis, addonBasisLabels, newId } from "@/lib/content";
 import { saveDraftAction } from "@/app/admin/actions";
+import { formatKr, parseKroner } from "@/lib/format";
+import { useEditorState } from "./EditorState";
 
 interface Asset { id: string; name: string; width: number; height: number }
 
 function PriceInput({ id, valueOre, onChange, label }: { id: string; valueOre: number | null; onChange: (ore: number | null) => void; label: string }) {
   const [text, setText] = useState(valueOre === null ? "" : String(valueOre / 100).replace(".", ","));
+  const ore = parseKroner(text);
+  const unreadable = text.trim() !== "" && ore === null;
   return (
     <div>
       <label htmlFor={id} className="field-label">{label}</label>
-      <input id={id} inputMode="decimal" className="input" value={text} placeholder="0" onChange={(e) => {
+      <input id={id} inputMode="decimal" className="input" value={text} placeholder="0" aria-invalid={unreadable || undefined} aria-describedby={`${id}-h`} onChange={(e) => {
         const t = e.target.value;
         setText(t);
-        const n = Number(t.replace(/\s/g, "").replace(",", "."));
-        onChange(t.trim() === "" || Number.isNaN(n) || n < 0 ? null : Math.round(n * 100));
+        onChange(parseKroner(t));
       }} />
+      <p id={`${id}-h`} className={unreadable ? "field-error" : "field-hint"} aria-live="polite">
+        {unreadable ? "Kan ikke tolke beløpet. Skriv for eksempel 16 000 eller 1 250,50." : ore !== null ? `= ${formatKr(ore)}` : "\u00a0"}
+      </p>
     </div>
   );
 }
@@ -120,6 +126,7 @@ export function DraftEditor(props: {
   const [assets, setAssets] = useState<Asset[]>(props.assets);
   const saved = useRef(JSON.stringify([props.initialName, props.initialContent]));
   const [dirty, setDirty] = useState(false);
+  const shared = useEditorState();
   const [saving, setSaving] = useState(false);
   const expectedAt = useRef<string | null>(props.draftUpdatedAt);
   const [conflict, setConflict] = useState(false);
@@ -129,6 +136,8 @@ export function DraftEditor(props: {
 
   const snapshot = useMemo(() => JSON.stringify([name, c]), [name, c]);
   useEffect(() => { setDirty(snapshot !== saved.current); }, [snapshot]);
+  const { setDirty: setSharedDirty } = shared;
+  useEffect(() => { setSharedDirty(dirty); return () => setSharedDirty(false); }, [dirty, setSharedDirty]);
 
   // Advar ved ulagrede endringer: lukking/reload og klikk på interne lenker.
   useEffect(() => {
