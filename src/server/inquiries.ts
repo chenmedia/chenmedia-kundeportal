@@ -45,6 +45,7 @@ export async function submitInquiry(args: {
     package: pkg,
     addons: pub.content.addons,
     practical: pub.content.practical,
+    contactName: pub.content.contactName,
   };
 
   for (let attempt = 0; attempt < 5; attempt++) {

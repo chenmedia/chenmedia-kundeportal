@@ -55,9 +55,9 @@ export function buildEmails(inq: EmailInquiry, s: InquirySnapshot, notifyTo: str
       recipient: inq.contactEmail,
       subject: `Vi har mottatt forespørselen din (${inq.reference})`,
       body:
-        `Hei ${inq.contactName},\n\nTakk! Vi har mottatt forespørselen din. Kai følger opp for å avklare tilgjengelighet og detaljer.\n\n` +
+        `Hei ${inq.contactName},\n\nTakk! Vi har mottatt forespørselen din. ${s.contactName || "Chen Media"} følger opp for å avklare tilgjengelighet og detaljer.\n\n` +
         `Dette er en kvittering på forespørselen, ikke en bekreftet booking. Oppdraget er bekreftet først når du har fått bekreftelse fra Chen Media.\n\n` +
-        `Du har sendt inn:\n\n${body}\n\nSpørsmål? Kontakt Kai: ${process.env.NOTIFY_EMAIL || "kai@chenmedia.no"}\n\nChen Media`,
+        `Du har sendt inn:\n\n${body}\n\nSpørsmål? Kontakt ${s.contactName || "Chen Media"}: ${process.env.NOTIFY_EMAIL || "kai@chenmedia.no"}\n\nChen Media`,
     },
   ];
 }

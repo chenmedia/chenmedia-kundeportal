@@ -140,6 +140,25 @@ table.tbl th, table.tbl td { padding: 12px 6px; border-bottom: 1px solid var(--c
 .sticky-cta > * { pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) { .sticky-cta { transition: none; } }
 
+/* Galleri: bildetekst over bildet og lightbox */
+.gallery-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 36px 16px 14px; margin: 0; color: #fff; font-size: 14px; line-height: 1.35; pointer-events: none;
+  background: linear-gradient(to top, rgba(17,17,17,.82), rgba(17,17,17,0)); }
+.gallery-item img { transition: transform .35s ease; }
+@media (hover: hover) { .gallery-item:hover img { transform: scale(1.03); } }
+@media (prefers-reduced-motion: reduce) { .gallery-item img { transition: none; } .gallery-item:hover img { transform: none; } }
+dialog.lightbox { padding: 0; border: 0; background: rgba(17,17,17,.98); max-width: none; max-height: none; width: 100%; height: 100%; margin: 0; color: #fff; }
+dialog.lightbox::backdrop { background: rgba(17,17,17,.6); }
+dialog.lightbox[open] { display: grid; place-items: center; }
+.lightbox__figure { margin: 0; max-width: min(1200px, calc(100vw - 32px)); display: grid; gap: 12px; justify-items: center; }
+.lightbox__img { max-width: 100%; max-height: calc(100dvh - 160px); width: auto; height: auto; border-radius: 12px; object-fit: contain; }
+.lightbox__caption { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 16px; font-size: 15px; text-align: center; }
+.lightbox__count { color: rgb(255 255 255 / .7); }
+.lightbox__close { position: absolute; top: 16px; right: 16px; background: #fff; color: var(--color-ink); border-color: #fff; }
+.lightbox__nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; padding: 0; background: #fff; color: var(--color-ink); border-color: #fff; font-size: 20px; }
+.lightbox__nav--prev { left: 12px; }
+.lightbox__nav--next { right: 12px; }
+dialog.lightbox :focus-visible { outline-color: #fff; }
+
 /* Skjemadialog */
 html.modal-open { overflow: hidden; }
 dialog.request-dialog { padding: 0; border: 0; background: transparent; max-width: none; max-height: none; width: 100%; height: 100%; margin: 0; color: var(--color-ink); }
@@ -156,75 +175,91 @@ dialog.request-dialog::backdrop { background: rgba(17,17,17,.6); backdrop-filter
 }
 
 /* ---------- Utskrift / lagre som PDF ----------
-   Utskriften er et eget A4-dokument, ikke en krympet nettside: pakkene blir rader (navn og beskrivelse, hva som
-   er inkludert, pris), tillegg og vilkår legges under hverandre, og alt interaktivt og dekorativt skjules.
-   Reglene bruker !important fordi Tailwinds brytepunkter (md:, lg:) ellers slår ulikt ut avhengig av papirbredde. */
+   Utskriften skal se ut som kundesiden: kremfarget side, hvite avrundede kort, tre pakker side om side, svart
+   «Praktisk»-flate og svart bunnfelt. Bare det interaktive (knapper, dialog, flytende knapp) og tunge bilder
+   (galleri, pakkebilder) skjules, slik at prislisten holder seg til A4.
+   Reglene bruker !important fordi Tailwinds brytepunkter (md:, lg:) ellers slår ulikt ut avhengig av papirbredde.
+   print-color-adjust: exact gjør at bakgrunnsfarger skrives ut også når «Bakgrunnsgrafikk» er av i utskriftsdialogen. */
 @media print {
-  @page { size: A4; margin: 12mm 14mm; }
-  html, body { background: #fff !important; color: #111 !important; }
-  body { font-size: 10pt; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Margen ligger som polstring på body (gjentas per side med box-decoration-break), slik at kremfargen dekker hele arket */
+  @page { size: A4; margin: 0; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { background: var(--color-cream) !important; color: var(--color-ink) !important; }
+  body { font-size: 9pt; line-height: 1.45; padding: 9mm 12mm; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 
-  /* Skjules: knapper, dialog, bilder og andre nettflater */
+  /* Skjules: knapper, dialog, store bilder og andre nettflater */
   .no-print, .btn, .sticky-cta, dialog, .skip-link, nav, [data-testid="open-form"],
-  .hero-media, .hero-actions, .pkg-image, .pkg-action, .step-num, .gallery-section, .practical-contact,
-  #hero p.eyebrow, .footer-brand, .footer-version { display: none !important; }
+  .hero-actions, .pkg-image, .pkg-action, .step-num, .gallery-section, .practical-contact { display: none !important; }
+
+  /* Admin-forhåndsvisning og arkiv: skallet (topp, banner, negative marger, full skjermhøyde) skal ikke påvirke arket */
+  .admin-root { min-height: 0 !important; background: none !important; }
+  .admin-main, .preview-shell { margin: 0 !important; padding: 0 !important; max-width: none !important; }
+  .preview-shell > .bg-cream { background: none !important; }
 
   .wrap { max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
-  section { padding-top: 4mm !important; padding-bottom: 0 !important; }
+  section { padding-top: 4.5mm !important; padding-bottom: 0 !important; }
   h1, h2, h3 { break-after: avoid; }
-  a { text-decoration: none; color: inherit; }
   a, .break-all { word-break: normal !important; overflow-wrap: anywhere; }
-  .card { box-shadow: none !important; background: none !important; }
+  .card { box-shadow: none !important; border-radius: 5mm !important; }
+  .eyebrow { font-size: 6.5pt !important; }
+  .section-title { font-size: 14pt !important; }
 
   /* Topp */
-  .print-head { padding: 0 0 3mm !important; border-bottom: 0.5mm solid #111; }
+  .print-head { padding: 0 0 2mm !important; }
   .print-head img { height: 9mm !important; width: auto !important; }
-  #hero { padding-top: 4mm !important; }
-  #hero > div { display: block !important; }
-  .hero-title { font-size: 20pt !important; line-height: 1.1; }
-  #hero .ingress { font-size: 10pt !important; margin-top: 3mm !important; max-width: none !important; }
-  #hero dl { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; margin-top: 4mm !important; border: 0; border-top: 0.2mm solid #bbb; border-bottom: 0.2mm solid #bbb; border-radius: 0; }
-  #hero dl .fact { padding: 2mm 3mm !important; }
-  #hero dl .fact + .fact { border-top: 0 !important; border-left: 0.2mm solid #ccc !important; }
-  #hero dl dd { font-size: 11pt !important; }
+  #hero { padding-top: 2mm !important; }
+  #hero > div:first-child { display: grid !important; grid-template-columns: 1.35fr 1fr !important; gap: 8mm !important; align-items: center; }
+  #hero .eyebrow.mb-5 { margin-bottom: 3mm !important; }
+  .hero-title { font-size: 21pt !important; line-height: 1.1; }
+  #hero .ingress { font-size: 9.5pt !important; margin-top: 3mm !important; max-width: none !important; }
+  .hero-media { aspect-ratio: auto !important; height: 33mm; border: 0 !important; border-radius: 6mm !important; }
+  .hero-media .display { font-size: 14pt !important; left: 5mm !important; bottom: 5mm !important; }
+  #hero dl { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; margin-top: 5mm !important; }
+  #hero dl .fact { padding: 2.5mm 5mm !important; }
+  #hero dl .fact + .fact { border-top: 0 !important; border-left: 1px solid var(--color-line) !important; }
+  #hero dl dd { font-size: 11pt !important; margin-top: 0.5mm !important; }
 
-  /* Pakker: én rad per pakke */
-  .packages-section > div:first-child { display: block !important; break-after: avoid; }
-  .packages-section > div:first-child > p { max-width: none !important; margin-top: 1.5mm; font-size: 9pt !important; }
-  #pakker-title, .addons-card .eyebrow, .practical-card .eyebrow { display: none !important; }
-  .section-title { font-size: 13pt !important; }
-  #pakker > ul { display: block !important; margin-top: 3mm !important; border-top: 0.5mm solid #111; }
-  .pkg-card { display: block !important; border: 0 !important; border-bottom: 0.2mm solid #bbb !important; border-radius: 0 !important; overflow: visible !important; break-inside: avoid; transform: none !important; }
-  .pkg-body { display: grid !important; grid-template-columns: 1fr 1.15fr 32mm; grid-template-rows: auto 1fr; grid-template-areas: "head incl price" "desc incl price"; column-gap: 6mm; align-items: start; padding: 3mm 0 !important; }
-  .pkg-head { grid-area: head; }
+  /* Pakker: tre kort side om side */
+  .packages-section > div:first-child { display: flex !important; break-after: avoid; }
+  .packages-section > div:first-child > p { max-width: 70mm !important; font-size: 8pt !important; }
+  #pakker > ul { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 4mm !important; margin-top: 4mm !important; }
+  /* Ett og to kort fyller bredden, fire blir 2 × 2 (ikke 3 + 1) */
+  #pakker > ul:has(> li:only-child) { grid-template-columns: 1fr !important; }
+  #pakker > ul:has(> li:nth-child(2):last-child), #pakker > ul:has(> li:nth-child(4):last-child) { grid-template-columns: repeat(2, 1fr) !important; }
+  .pkg-card { display: block !important; overflow: visible !important; break-inside: avoid; transform: none !important; }
+  .pkg-body { display: block !important; padding: 4.5mm !important; }
   .pkg-head h3 { font-size: 12pt !important; }
-  .pkg-desc { grid-area: desc; margin: 1.5mm 0 0 !important; font-size: 9pt !important; color: #333; }
-  .pkg-incl { grid-area: incl; display: flex !important; flex-direction: column; gap: 1.2mm; margin: 0 !important; font-size: 9pt !important; }
-  .pkg-incl li { margin: 0 !important; }
-  .pkg-incl svg { height: 3.5mm !important; width: 3.5mm !important; margin-top: 0.6mm !important; }
-  .pkg-price { grid-area: price; margin: 0 !important; padding: 0 !important; border: 0 !important; text-align: right; }
-  .pkg-price .title { font-size: 16pt !important; margin-top: 0.5mm !important; }
-  .pkg-price p { font-size: 8.5pt; }
-  .pkg-price p + p { margin-top: 0.5mm !important; }
+  .pkg-price { margin: 3mm 0 0 !important; padding: 2.5mm 0 0 !important; }
+  .pkg-price .title { font-size: 20pt !important; margin-top: 1mm !important; }
+  .pkg-price p { font-size: 8pt !important; margin-top: 1mm !important; }
+  .pkg-desc { margin: 2.5mm 0 0 !important; font-size: 8.5pt !important; }
+  .pkg-incl { margin: 3mm 0 0 !important; font-size: 8.5pt !important; }
+  .pkg-incl > li + li { margin-top: 1.5mm !important; }
+  .pkg-incl li { gap: 2mm !important; }
+  .pkg-incl svg { height: 3.5mm !important; width: 3.5mm !important; margin-top: 0.5mm !important; }
 
-  /* Tillegg og praktisk: under hverandre, uten flater */
-  .addons-section { display: grid !important; grid-template-columns: 1.55fr 1fr !important; column-gap: 9mm; align-items: start; }
-  .addons-card, .practical-card { grid-column: auto !important; }
+  /* Tillegg (hvitt kort) og praktisk (svart flate) */
+  .addons-section { display: grid !important; grid-template-columns: 3fr 2fr !important; gap: 4mm !important; align-items: stretch; }
+  .addons-card, .practical-card { grid-column: auto !important; min-width: 0; break-inside: avoid; padding: 4.5mm !important; }
   .addons-card:only-child, .practical-card:only-child { grid-column: 1 / -1 !important; }
-  .addons-card, .practical-card { min-width: 0; break-inside: avoid; display: block !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: none !important; color: #111 !important; }
-  .addons-card .tbl { margin-top: 2mm !important; font-size: 9.5pt !important; }
-  .addons-card .tbl th, .addons-card .tbl td { padding: 1.5mm 1mm !important; }
+  .practical-card { border-radius: 5mm !important; }
+  .addons-card .tbl { margin-top: 2mm !important; font-size: 8.5pt !important; }
+  .addons-card .tbl th, .addons-card .tbl td { padding: 1.3mm 1mm !important; }
   .addons-card .tbl tr { break-inside: avoid; }
-  .practical-card ul { margin-top: 2mm !important; font-size: 9.5pt !important; }
-  .practical-card ul > li { margin-top: 0 !important; }
-  .practical-card ul > li + li { margin-top: 1.2mm !important; }
+  .addons-card .tbl .mono-num { font-size: 8pt !important; }
+  .addons-card .tbl .text-sm { font-size: 7.5pt !important; line-height: 1.35; }
+  .practical-card ul { margin-top: 3mm !important; font-size: 8.5pt !important; }
+  .practical-card ul > li + li { margin-top: 2mm !important; }
   .practical-card svg { height: 3.5mm !important; width: 3.5mm !important; }
-  .practical-card > p:last-of-type { font-size: 8.5pt !important; margin-top: 3mm !important; }
+  .practical-card > p:last-of-type { font-size: 7.5pt !important; margin-top: 4mm !important; }
 
-  /* Bunn: kontakt og versjon, uten svart flate */
-  .site-footer { background: none !important; margin-top: 3mm; border-top: 0.5mm solid #111; break-inside: avoid; }
-  .footer-grid { grid-template-columns: 1fr !important; gap: 0 !important; padding: 3mm 0 0 !important; }
-  .site-footer p, .site-footer a { font-size: 9pt !important; }
-  /* Høyere spesifisitet enn .eyebrow-dark slik at overskriftene ikke blir hvite på hvitt */
-  .site-footer :is(*, .eyebrow), .practical-card :is(*, .eyebrow) { color: #111 !important; }
+  /* Bunn: svart felt med logo, kontakt og versjon */
+  .site-footer { margin-top: 4.5mm; border-radius: 5mm; break-inside: avoid; }
+  .footer-grid { grid-template-columns: 1fr 1.4fr !important; gap: 8mm !important; padding: 4mm 6mm !important; }
+  .footer-brand img { height: 9mm !important; }
+  .site-footer p, .site-footer a { font-size: 8.5pt !important; }
+  .site-footer .eyebrow { font-size: 6.5pt !important; }
+  .site-footer .mt-6 { margin-top: 2.5mm !important; }
+  .site-footer .mt-3 { margin-top: 1mm !important; }
+  .site-footer .mt-4 { margin-top: 2mm !important; }
 }
