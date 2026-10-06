@@ -61,7 +61,7 @@ function PackageCard({ p, index, mediaUrl }: { p: PackageContent; index: number;
           <p className="text-sm text-muted mt-2">eks. mva.</p>
           {p.priceNote && <p className="text-sm text-muted mt-3">{p.priceNote}</p>}
         </div>
-        {p.description && <p className="pkg-desc mt-6 text-[15px]">{p.description}</p>}
+        {p.description && <p className="pkg-desc mt-6 text-[15px] whitespace-pre-line">{p.description}</p>}
         <Included p={p} />
         <div className="pkg-action mt-auto pt-8">
           <SelectPackageButton
