@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { db } from "@/server/db";
 import { assetsBelongToCustomer, duplicateCustomer, publish, saveDraft } from "@/server/customers";
 import { MAX_GALLERY, contentImageIds, contentSchema, parseContent, remapImageIds } from "@/lib/content";
 import { saveUpload } from "@/server/media";
 import { GET as customerMedia } from "@/app/k/[token]/media/[assetId]/route";
-import { makePublished, PNG_1X1 } from "./helpers";
+import { draftOf, makePublished, PNG_1X1 } from "./helpers";
 
 async function upload(customerId: string, name: string) {
   const r = await saveUpload(customerId, PNG_1X1, name);
@@ -76,7 +75,7 @@ describe("flere bilder i innholdet", () => {
     const unused = await upload(a.customer.id, "ubrukt.png");
     const other = await upload(b.customer.id, "annen.png");
 
-    const draft = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: a.customer.id } })).content);
+    const draft = parseContent((await draftOf(a.customer.id)).content);
     draft.gallery = [{ id: "g1", imageId: gal, alt: "Fra en konferanse", caption: "" }];
     draft.packages[0].imageId = pkg;
     await saveDraft(a.customer.id, "Galleri A", draft);
@@ -98,14 +97,14 @@ describe("flere bilder i innholdet", () => {
     const hero = await upload(src.customer.id, "hero.png");
     const gal = await upload(src.customer.id, "gal.png");
     const pkg = await upload(src.customer.id, "pkg.png");
-    const draft = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: src.customer.id } })).content);
+    const draft = parseContent((await draftOf(src.customer.id)).content);
     draft.heroImageId = hero;
     draft.gallery = [{ id: "g1", imageId: gal, alt: "", caption: "" }];
     draft.packages[1].imageId = pkg;
     await saveDraft(src.customer.id, "Kopi-kilde", draft);
 
     const copy = await duplicateCustomer(src.customer.id);
-    const copied = parseContent((await db.customerDraft.findUniqueOrThrow({ where: { customerId: copy.id } })).content);
+    const copied = parseContent((await draftOf(copy.id)).content);
     const ids = contentImageIds(copied);
     expect(ids).toHaveLength(3);
     expect(ids).not.toContain(hero);

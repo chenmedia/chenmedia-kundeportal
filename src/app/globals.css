@@ -74,6 +74,15 @@ body.admin { background: #f7f6ec; }
   border: 2px solid transparent; cursor: pointer; text-decoration: none;
   transition: background-color .15s, color .15s;
 }
+/* Faner mellom portalene (eventfoto / eventfilm) på kundesiden */
+.tab {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 999px;
+  font-family: var(--font-body); font-weight: 700; font-size: 15px; text-decoration: none;
+  border: 2px solid var(--color-ink); color: var(--color-ink); background: transparent;
+  transition: background-color .15s, color .15s;
+}
+.tab:hover { background: #fff; }
+.tab[aria-current="page"] { background: var(--color-ink); color: #fff; }
 .btn-accent { background: var(--color-accent-strong); color: #fff; }
 .btn-accent:hover { background: var(--color-accent-dark); }
 .btn-dark { background: var(--color-ink); color: #fff; }

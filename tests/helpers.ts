@@ -2,10 +2,22 @@ import { db } from "@/server/db";
 import { createCustomer, getRawToken, publish } from "@/server/customers";
 import { obosContent } from "@/server/seed-data";
 import { InquiryInput } from "@/lib/inquiry";
+import type { PortalKind } from "@/lib/portal";
 
-export async function makeCustomer(name = "Testkunde") {
-  const c = await createCustomer(name);
-  await db.customerDraft.update({ where: { customerId: c.id }, data: { content: JSON.stringify(obosContent()) } });
+export const portalIdOf = async (customerId: string, kind: PortalKind = "photo") =>
+  (await db.portal.findUniqueOrThrow({ where: { customerId_kind: { customerId, kind } } })).id;
+
+/** Utkastraden til en portal (standard: eventfoto). */
+export const draftOf = async (customerId: string, kind: PortalKind = "photo") =>
+  db.portalDraft.findUniqueOrThrow({ where: { portalId: await portalIdOf(customerId, kind) } });
+
+export async function setDraftContent(customerId: string, content: unknown, kind: PortalKind = "photo") {
+  await db.portalDraft.update({ where: { portalId: await portalIdOf(customerId, kind) }, data: { content: JSON.stringify(content) } });
+}
+
+export async function makeCustomer(name = "Testkunde", kinds: PortalKind[] = ["photo"]) {
+  const c = await createCustomer(name, undefined, kinds);
+  for (const kind of kinds) await setDraftContent(c.id, obosContent(), kind);
   return c;
 }
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PORTALS, type PortalKind } from "./portal";
 
 /** Priser lagres som heltall i øre. */
 export const MAX_PACKAGES = 6;
@@ -56,7 +57,7 @@ const galleryItemSchema = z.object({
 export type GalleryItem = z.infer<typeof galleryItemSchema>;
 
 export const contentSchema = z.object({
-  introTitle: optionalText(150), // tomt = «Eventfotografering for [kunde]»
+  introTitle: optionalText(150), // tomt = standardtittel for portalen, f.eks. «Eventfotografering for [kunde]»
   introText: z.string().trim().max(800).default(""),
   ctaLabel: optionalText(60),
   heroImageId: z.string().nullable().default(null),
@@ -65,18 +66,13 @@ export const contentSchema = z.object({
   validityText: optionalText(200),
   contactName: optionalText(100),
   contactEmail: optionalText(200),
-  galleryTitle: optionalText(80), // tomt = «Bilder fra oppdrag»
+  galleryTitle: optionalText(80), // tomt = standardtittel for portalen, f.eks. «Bilder fra oppdrag»
   gallery: z.array(galleryItemSchema).max(MAX_GALLERY).default([]),
   packages: z.array(packageSchema).max(MAX_PACKAGES).default([]),
   addons: z.array(addonSchema).max(30).default([]),
   practical: z.array(z.string().trim().max(300)).max(20).default([]),
 });
 export type Content = z.infer<typeof contentSchema>;
-
-export const DEFAULT_INTRO =
-  "Her finner du deres avtalte fotopakker og priser. Send oss informasjon om arrangementet, så avklarer vi tilgjengelighet og detaljer.";
-export const DEFAULT_CTA = "Send et fotobehov";
-export const DEFAULT_GALLERY_TITLE = "Bilder fra oppdrag";
 
 /** Alle bilder innholdet bruker (hero, pakker, galleri), uten duplikater. Styrer hva kundelenken får servere. */
 export function contentImageIds(content: Content): string[] {
@@ -99,8 +95,8 @@ export function newId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function emptyContent(): Content {
-  return contentSchema.parse({ introText: DEFAULT_INTRO, ctaLabel: DEFAULT_CTA });
+export function emptyContent(kind: PortalKind = "photo"): Content {
+  return contentSchema.parse({ introText: PORTALS[kind].intro, ctaLabel: PORTALS[kind].cta });
 }
 
 export function parseContent(json: string): Content {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isEmail, type AddonContent, type PackageContent } from "./content";
 import { todayInOslo } from "./format";
+import type { PortalKind } from "./portal";
 
 export const inquiryInputSchema = z
   .object({
@@ -45,6 +46,8 @@ export const STATUS_LABELS: Record<string, string> = {
 export const STATUSES = Object.keys(STATUS_LABELS);
 
 export interface InquirySnapshot {
+  /** Portalen forespørselen kom fra. Eldre forespørsler mangler feltet (de er alle eventfoto). */
+  kind?: PortalKind;
   customerName: string;
   agreementLabel: string;
   versionNumber: number;

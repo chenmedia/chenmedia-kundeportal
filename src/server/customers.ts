@@ -1,25 +1,53 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type PublishedVersion } from "@prisma/client";
 import { db } from "./db";
 import { EMPTY_CONTACT, type CustomerContact } from "@/lib/customer-contact";
 import { appUrl } from "./app-url";
 import { generateToken, sha256, encryptText, decryptText } from "./crypto";
 import { Content, contentSchema, emptyContent, parseContent, canonical, publishProblems, remapImageIds } from "@/lib/content";
+import { PORTAL_KINDS, sortKinds, type PortalKind } from "@/lib/portal";
 
 function customerUrl(token: string): string {
   return `${appUrl()}/k/${token}`;
 }
 
-export async function createCustomer(name: string, contact: CustomerContact = EMPTY_CONTACT) {
+/** Oppretter kunden med én upublisert portal per valgt type (standard: bare eventfoto). */
+export async function createCustomer(name: string, contact: CustomerContact = EMPTY_CONTACT, kinds: PortalKind[] = ["photo"]) {
   const token = generateToken();
+  const unique = PORTAL_KINDS.filter((k) => kinds.includes(k));
+  if (unique.length === 0) throw new Error("Kunden må ha minst én portal.");
   return db.customer.create({
     data: {
       name: name.trim(),
       ...contact,
       tokenHash: sha256(token),
       tokenEnc: encryptText(token),
-      draft: { create: { content: JSON.stringify(emptyContent()) } },
+      portals: { create: unique.map((kind) => ({ kind, draft: { create: { content: JSON.stringify(emptyContent(kind)) } } })) },
     },
   });
+}
+
+/**
+ * Legger en portal til en kunde som ikke har den. Kontaktperson og vilkår kopieres fra en eksisterende portal
+ * (utkastet), slik at admin slipper å skrive dem på nytt. Priser og pakker kopieres ikke.
+ */
+export async function addPortal(customerId: string, kind: PortalKind): Promise<boolean> {
+  const customer = await db.customer.findUnique({ where: { id: customerId }, include: { portals: { include: { draft: true } } } });
+  if (!customer) return false;
+  if (customer.portals.some((p) => p.kind === kind)) return false;
+  const content = emptyContent(kind);
+  const source = sortKinds(customer.portals).find((p) => p.draft);
+  if (source?.draft) {
+    const s = parseContent(source.draft.content);
+    Object.assign(content, { contactName: s.contactName, contactEmail: s.contactEmail, validityText: s.validityText, practical: s.practical });
+  }
+  try {
+    await db.portal.create({ data: { customerId, kind, draft: { create: { content: JSON.stringify(content) } } } });
+  } catch (e) {
+    // To samtidige forsøk: den ene taper på unik-nøkkelen (customerId + kind) og har da ingenting å gjøre.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return false;
+    throw e;
+  }
+  return true;
 }
 
 export async function getAdminCustomerLink(customerId: string): Promise<string | null> {
@@ -50,25 +78,34 @@ export class DraftConflictError extends Error {
   constructor() { super("draft_conflict"); this.name = "DraftConflictError"; }
 }
 
+/** Portalen finnes alltid for kunder opprettet før portaler ble innført (migrasjonen lager foto-portalen). */
+async function portalIdOrThrow(customerId: string, kind: PortalKind): Promise<string> {
+  const portal = await db.portal.findUnique({ where: { customerId_kind: { customerId, kind } }, select: { id: true } });
+  if (!portal) throw new Error(`Kunden har ingen ${kind}-portal.`);
+  return portal.id;
+}
+
 /**
- * Lagrer utkastet. Med `expectedUpdatedAt` (tidspunktet utkastet hadde da siden ble åpnet) avvises lagringen med
- * DraftConflictError hvis noen andre har lagret i mellomtiden (annen fane eller administrator), i stedet for å
+ * Lagrer utkastet til en portal (standard: eventfoto). Med `expectedUpdatedAt` (tidspunktet utkastet hadde da siden ble åpnet)
+ * avvises lagringen med DraftConflictError hvis noen andre har lagret i mellomtiden (annen fane eller administrator), i stedet for å
  * overskrive uten å si fra. Uten verdien overskrives utkastet. Gir utkastets nye tidspunkt.
+ * Kundenavnet gjelder hele kunden og lagres sammen med utkastet.
  */
-export async function saveDraft(customerId: string, name: string, content: Content, expectedUpdatedAt?: string | null): Promise<{ updatedAt: Date }> {
+export async function saveDraft(customerId: string, name: string, content: Content, expectedUpdatedAt?: string | null, kind: PortalKind = "photo"): Promise<{ updatedAt: Date }> {
   const parsed = contentSchema.parse(content);
   const existing = await db.customer.findUniqueOrThrow({ where: { id: customerId } });
+  const portalId = await portalIdOrThrow(customerId, kind);
   const clearRename = existing.needsRename && name.trim() !== existing.name;
   const expected = expectedUpdatedAt ? new Date(expectedUpdatedAt) : null;
   if (expected && Number.isNaN(expected.getTime())) throw new DraftConflictError();
   return db.$transaction(async (tx) => {
     if (expected) {
-      const r = await tx.customerDraft.updateMany({ where: { customerId, updatedAt: expected }, data: { content: JSON.stringify(parsed) } });
+      const r = await tx.portalDraft.updateMany({ where: { portalId, updatedAt: expected }, data: { content: JSON.stringify(parsed) } });
       if (r.count === 0) throw new DraftConflictError();
     } else {
-      await tx.customerDraft.upsert({
-        where: { customerId },
-        create: { customerId, content: JSON.stringify(parsed) },
+      await tx.portalDraft.upsert({
+        where: { portalId },
+        create: { portalId, content: JSON.stringify(parsed) },
         update: { content: JSON.stringify(parsed) },
       });
     }
@@ -76,24 +113,25 @@ export async function saveDraft(customerId: string, name: string, content: Conte
       where: { id: customerId },
       data: { name: name.trim(), ...(clearRename ? { needsRename: false } : {}) },
     });
-    const draft = await tx.customerDraft.findUniqueOrThrow({ where: { customerId } });
+    const draft = await tx.portalDraft.findUniqueOrThrow({ where: { portalId } });
     return { updatedAt: draft.updatedAt };
   });
 }
 
 /** Erstatter utkastet med innholdet i en publisert versjon. Publiserte versjoner påvirkes ikke. */
-export async function restoreVersionAsDraft(customerId: string, versionNumber: number): Promise<boolean> {
-  const v = await db.publishedVersion.findUnique({ where: { customerId_number: { customerId, number: versionNumber } } });
+export async function restoreVersionAsDraft(customerId: string, versionNumber: number, kind: PortalKind = "photo"): Promise<boolean> {
+  const portalId = await portalIdOrThrow(customerId, kind);
+  const v = await db.publishedVersion.findUnique({ where: { portalId_number: { portalId, number: versionNumber } } });
   if (!v) return false;
   const customer = await db.customer.findUniqueOrThrow({ where: { id: customerId } });
-  await saveDraft(customerId, customer.name, parseContent(v.content));
+  await saveDraft(customerId, customer.name, parseContent(v.content), undefined, kind);
   return true;
 }
 
+/** Kopierer kunden med alle portalene (utkast, ikke versjoner), bildebiblioteket og en ny lenke. */
 export async function duplicateCustomer(sourceId: string) {
-  const src = await db.customer.findUniqueOrThrow({ where: { id: sourceId }, include: { draft: true, assets: true } });
+  const src = await db.customer.findUniqueOrThrow({ where: { id: sourceId }, include: { portals: { include: { draft: true } }, assets: true } });
   const token = generateToken();
-  const content = src.draft ? parseContent(src.draft.content) : emptyContent();
   const created = await db.customer.create({
     data: {
       name: `${src.name} (kopi)`,
@@ -114,33 +152,39 @@ export async function duplicateCustomer(sourceId: string) {
     idMap.set(a.id, copy.id);
   }
   // Nye pakke-/tillegg-ID-er er ikke nødvendig, men bildereferansene må pekes om.
-  const copied = remapImageIds(content, (id) => idMap.get(id));
-  await db.customerDraft.create({ data: { customerId: created.id, content: JSON.stringify(copied) } });
+  for (const p of sortKinds(src.portals)) {
+    const kind = p.kind as PortalKind;
+    const content = p.draft ? parseContent(p.draft.content) : emptyContent(kind);
+    const copied = remapImageIds(content, (id) => idMap.get(id));
+    await db.portal.create({ data: { customerId: created.id, kind, draft: { create: { content: JSON.stringify(copied) } } } });
+  }
   return created;
 }
 
-export async function publish(customerId: string) {
-  const customer = await db.customer.findUniqueOrThrow({ where: { id: customerId }, include: { draft: true } });
-  const content = parseContent(customer.draft?.content ?? JSON.stringify(emptyContent()));
+export async function publish(customerId: string, kind: PortalKind = "photo") {
+  const customer = await db.customer.findUniqueOrThrow({ where: { id: customerId } });
+  const portal = await db.portal.findUniqueOrThrow({ where: { customerId_kind: { customerId, kind } }, include: { draft: true } });
+  const portalId = portal.id;
+  const content = parseContent(portal.draft?.content ?? JSON.stringify(emptyContent(kind)));
   const problems = publishProblems(content, customer.name, customer.needsRename);
   if (problems.length) return { ok: false as const, problems };
   // To samtidige publiseringer kan velge samme versjonsnummer. Den ene taper på unik-nøkkelen
-  // (customerId + number) og prøver da på nytt med neste nummer.
+  // (portalId + number) og prøver da på nytt med neste nummer.
   let version;
   for (let attempt = 0; ; attempt++) {
     try {
       version = await db.$transaction(async (tx) => {
-        const last = await tx.publishedVersion.aggregate({ where: { customerId }, _max: { number: true } });
+        const last = await tx.publishedVersion.aggregate({ where: { portalId }, _max: { number: true } });
         const v = await tx.publishedVersion.create({
           data: {
-            customerId,
+            portalId,
             number: (last._max.number ?? 0) + 1,
             customerName: customer.name,
             label: content.agreementLabel,
             content: canonical(content),
           },
         });
-        await tx.customer.update({ where: { id: customerId }, data: { currentVersionId: v.id } });
+        await tx.portal.update({ where: { id: portalId }, data: { currentVersionId: v.id } });
         return v;
       });
       break;
@@ -152,19 +196,42 @@ export async function publish(customerId: string) {
   return { ok: true as const, version };
 }
 
-/** Oppslag for kundelenken. Alle ugyldige tilstander gir null (samme melding). */
-export async function resolvePublished(token: string) {
+export interface PublishedPortal {
+  kind: PortalKind;
+  version: PublishedVersion;
+  content: Content;
+}
+
+/** Alle publiserte portaler bak en kundelenke, i fast rekkefølge (foto, film). Null hvis lenken ikke gir tilgang til noe. */
+export async function resolvePublishedPortals(token: string) {
   if (!token || token.length < 20 || token.length > 100) return null;
   const c = await db.customer.findUnique({
     where: { tokenHash: sha256(token) },
-    include: { currentVersion: true },
+    include: { portals: { include: { currentVersion: true } } },
   });
-  if (!c || !c.active || !c.currentVersion) return null;
+  if (!c || !c.active) return null;
+  const portals: PublishedPortal[] = sortKinds(c.portals).flatMap((p) =>
+    p.currentVersion ? [{ kind: p.kind as PortalKind, version: p.currentVersion, content: parseContent(p.currentVersion.content) }] : [],
+  );
+  if (portals.length === 0) return null;
+  return { customerId: c.id, portals };
+}
+
+/**
+ * Oppslag for kundelenken. Alle ugyldige tilstander gir null (samme melding), også når ingen portal er publisert.
+ * Gir den ønskede portalen hvis den er publisert, ellers den første publiserte. `available` er alle publiserte portaler (fanene).
+ */
+export async function resolvePublished(token: string, wanted?: PortalKind | null) {
+  const all = await resolvePublishedPortals(token);
+  if (!all) return null;
+  const chosen = all.portals.find((p) => p.kind === wanted) ?? all.portals[0];
   return {
-    customerId: c.id,
-    customerName: c.currentVersion.customerName,
-    version: c.currentVersion,
-    content: parseContent(c.currentVersion.content),
+    customerId: all.customerId,
+    customerName: chosen.version.customerName,
+    kind: chosen.kind,
+    version: chosen.version,
+    content: chosen.content,
+    available: all.portals.map((p) => p.kind),
   };
 }
 

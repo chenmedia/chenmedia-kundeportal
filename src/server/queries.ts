@@ -4,6 +4,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
+import type { PortalKind } from "@/lib/portal";
 
 export interface NewInquirySnapshot {
   newCount: number;
@@ -32,8 +33,8 @@ export async function dashboardData(search: string) {
     db.customer.findMany({
       where: search ? { name: { contains: search, mode: "insensitive" } } : undefined,
       orderBy: { name: "asc" },
-      // Oversikten trenger bare etikett og tidspunkt, ikke hele innholds-JSON-en til hver kunde.
-      include: { currentVersion: { select: { id: true, number: true, label: true, publishedAt: true } } },
+      // Oversikten trenger bare etikett og tidspunkt, ikke hele innholds-JSON-en til hver portal.
+      include: { portals: { select: { kind: true, currentVersion: { select: { id: true, number: true, label: true, publishedAt: true } } } } },
     }),
     db.inquiry.findMany({ where: { status: "new" }, orderBy: { createdAt: "desc" }, take: 5, include: { customer: true } }),
     failedEmailCount(),
@@ -42,7 +43,7 @@ export async function dashboardData(search: string) {
   return { customers, newInquiries, failedJobs, newCountByCustomer: new Map(newCounts.map((c) => [c.customerId, c._count])) };
 }
 
-export interface InquiryFilters { status?: string; customerId?: string; failedEmail?: boolean; q?: string }
+export interface InquiryFilters { status?: string; customerId?: string; kind?: PortalKind; failedEmail?: boolean; q?: string }
 
 /** Felles filter for listen og CSV-eksporten. Søket treffer arrangement, kontaktperson, e-post, referanse og kunde. */
 function inquiryWhere(f: InquiryFilters): Prisma.InquiryWhereInput {
@@ -50,6 +51,7 @@ function inquiryWhere(f: InquiryFilters): Prisma.InquiryWhereInput {
   return {
     ...(f.status ? { status: f.status } : {}),
     ...(f.customerId ? { customerId: f.customerId } : {}),
+    ...(f.kind ? { kind: f.kind } : {}),
     ...(f.failedEmail ? { emailJobs: { some: { status: "failed" } } } : {}),
     ...(q
       ? {
@@ -93,16 +95,18 @@ export const inquiryDetail = (id: string) =>
 export const recentEmailJobs = (take = 100) =>
   db.emailJob.findMany({ orderBy: { createdAt: "desc" }, take, include: { inquiry: { include: { customer: true } } } });
 
+/** Kunden med alle portaler (utkast og aktiv versjon) og bildebiblioteket. Til redigeringssiden. */
 export const customerForEditor = (id: string) =>
   db.customer.findUnique({
     where: { id },
-    include: { draft: true, currentVersion: true, assets: { orderBy: { createdAt: "desc" } } },
+    include: { portals: { include: { draft: true, currentVersion: true } }, assets: { orderBy: { createdAt: "desc" } } },
   });
 
-export const customerWithDraft = (id: string) => db.customer.findUnique({ where: { id }, include: { draft: true } });
+export const portalWithDraft = (customerId: string, kind: PortalKind) =>
+  db.portal.findUnique({ where: { customerId_kind: { customerId, kind } }, include: { draft: true, customer: true } });
 
-export const customerVersions = (id: string) =>
-  db.customer.findUnique({ where: { id }, include: { versions: { orderBy: { number: "desc" } } } });
+export const portalVersions = (customerId: string, kind: PortalKind) =>
+  db.portal.findUnique({ where: { customerId_kind: { customerId, kind } }, include: { customer: true, versions: { orderBy: { number: "desc" } } } });
 
-export const versionByNumber = (customerId: string, number: number) =>
-  db.publishedVersion.findUnique({ where: { customerId_number: { customerId, number } } });
+export const versionByNumber = (customerId: string, kind: PortalKind, number: number) =>
+  db.publishedVersion.findFirst({ where: { number, portal: { customerId, kind } } });

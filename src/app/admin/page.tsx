@@ -2,6 +2,7 @@ import Link from "next/link";
 import { dashboardData } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
 import { formatDateTime } from "@/lib/format";
+import { PORTALS, portalLabel, sortKinds } from "@/lib/portal";
 import { duplicateAction } from "./actions";
 import { ConfirmButton } from "@/components/ConfirmButton";
 
@@ -56,11 +57,12 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <div className="overflow-x-auto mt-4">
             <table className="tbl text-[15px]">
               <thead>
-                <tr className="eyebrow"><th>Kunde</th><th>Status</th><th>Avtale</th><th>Siste publisering</th><th>Nye</th><th><span className="sr-only">Handlinger</span></th></tr>
+                <tr className="eyebrow"><th>Kunde</th><th>Status</th><th>Portaler</th><th>Nye</th><th><span className="sr-only">Handlinger</span></th></tr>
               </thead>
               <tbody>
                 {customers.map((c) => {
-                  const status = !c.active ? "Deaktivert" : c.currentVersion ? "Publisert" : "Ikke publisert";
+                  const portals = sortKinds(c.portals);
+                  const status = !c.active ? "Deaktivert" : portals.some((p) => p.currentVersion) ? "Publisert" : "Ikke publisert";
                   return (
                     <tr key={c.id}>
                       <td>
@@ -68,8 +70,16 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                         {(c.contactName || c.contactEmail) && <span className="block text-sm text-muted">{c.contactName || c.contactEmail}</span>}
                       </td>
                       <td><span className="badge">{status}</span></td>
-                      <td>{c.currentVersion?.label ?? "–"}</td>
-                      <td>{c.currentVersion ? formatDateTime(c.currentVersion.publishedAt) : "–"}</td>
+                      <td>
+                        <ul className="grid gap-1">
+                          {portals.map((p) => (
+                            <li key={p.kind}>
+                              <Link className="link font-semibold" href={`/admin/kunder/${c.id}?tjeneste=${PORTALS[p.kind as keyof typeof PORTALS]?.slug ?? p.kind}`}>{portalLabel(p.kind)}</Link>
+                              <span className="text-sm text-muted"> · {p.currentVersion ? `${p.currentVersion.label} (v${p.currentVersion.number}), ${formatDateTime(p.currentVersion.publishedAt)}` : "ikke publisert"}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
                       <td>{counts.get(c.id) ?? 0}</td>
                       <td className="whitespace-nowrap">
                         <div className="flex gap-2">

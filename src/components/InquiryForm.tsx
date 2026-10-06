@@ -16,6 +16,9 @@ interface Props {
   contactEmail: string;
   /** Navnet som følger opp forespørselen (kontaktpersonen i avtalen). */
   contactName: string;
+  /** Overskrift i skjemaet, og om «bruk av bilder i trykk» skal tilbys (bare eventfoto). */
+  heading: string;
+  showPrintUse: boolean;
 }
 
 interface Values {
@@ -186,7 +189,7 @@ export function InquiryForm(props: Props) {
 
   return (
     <form onSubmit={onSubmit} noValidate aria-busy={sending}>
-      <h2 id="foresporsel-heading" tabIndex={-1} className="display text-2xl md:text-3xl outline-none">Send et fotobehov</h2>
+      <h2 id="foresporsel-heading" tabIndex={-1} className="display text-2xl md:text-3xl outline-none">{props.heading}</h2>
       <p className="mt-2 text-muted">Det tar omtrent to minutter. Du trenger ikke oppgi bedrift, vi vet hvem du er. Lukker du skjemaet, beholdes teksten din.</p>
 
       {disabled && props.disabledReason && (
@@ -301,10 +304,10 @@ export function InquiryForm(props: Props) {
             <input type="checkbox" checked={v.express} onChange={(e) => set("express", e.target.checked)} />
             <span>Ønsker levering innen 24 timer</span>
           </label>
-          <label className="check text-[15px]">
+          {props.showPrintUse && <label className="check text-[15px]">
             <input type="checkbox" checked={v.printUse} onChange={(e) => set("printUse", e.target.checked)} />
             <span>Ønsker å avklare bruk av bilder i trykk</span>
-          </label>
+          </label>}
           <p className="field-hint">Tillegg er ønsker som avklares i tilbudet. De er ikke bestilt før Chen Media har bekreftet.</p>
         </div>
 

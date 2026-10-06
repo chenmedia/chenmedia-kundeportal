@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { randomReference, sha256 } from "./crypto";
 import { allow } from "./rate-limit";
-import { resolvePublished } from "./customers";
+import { resolvePublishedPortals } from "./customers";
 import { buildEmails, notifyAddress, processInquiryJobs } from "./email";
 import { InquiryInput, InquirySnapshot, OTHER_PACKAGE } from "@/lib/inquiry";
 
@@ -17,13 +17,13 @@ export async function submitInquiry(args: {
   idempotencyKey: string;
   input: InquiryInput;
 }): Promise<SubmitResult> {
-  const pub = await resolvePublished(args.token);
-  if (!pub) return { ok: false, code: "UNAVAILABLE" };
+  const all = await resolvePublishedPortals(args.token);
+  if (!all) return { ok: false, code: "UNAVAILABLE" };
 
   // Dobbeltsending (nettverksforsøk): returner den eksisterende forespørselen.
   const existing = await db.inquiry.findUnique({ where: { idempotencyKey: args.idempotencyKey } });
   if (existing) {
-    if (existing.customerId !== pub.customerId) return { ok: false, code: "UNAVAILABLE" };
+    if (existing.customerId !== all.customerId) return { ok: false, code: "UNAVAILABLE" };
     const snap = JSON.parse(existing.snapshot) as InquirySnapshot;
     return {
       ok: true, duplicate: true, reference: existing.reference,
@@ -32,7 +32,15 @@ export async function submitInquiry(args: {
     };
   }
 
-  if (args.versionId !== pub.version.id) return { ok: false, code: "STALE_VERSION", currentVersionId: pub.version.id };
+  // Skjemaet hører til portalen (fanen) kunden så på. Er versjonen ikke lenger aktiv i noen portal, er siden foreldet.
+  const pub = all.portals.find((p) => p.version.id === args.versionId);
+  if (!pub) {
+    // Foreldet: svar med den aktive versjonen i samme portal som den gamle versjonen hørte til (ellers den første portalen).
+    const old = await db.publishedVersion.findUnique({ where: { id: args.versionId }, select: { portal: { select: { customerId: true, kind: true } } } });
+    const same = old && old.portal.customerId === all.customerId ? all.portals.find((p) => p.kind === old.portal.kind) : undefined;
+    return { ok: false, code: "STALE_VERSION", currentVersionId: (same ?? all.portals[0]).version.id };
+  }
+  const customerId = all.customerId;
 
   // Kundetilhørighet og pris hentes alltid fra publisert innhold, aldri fra skjemaet.
   const i = args.input;
@@ -40,7 +48,8 @@ export async function submitInquiry(args: {
   if (i.packageId !== OTHER_PACKAGE && !pkg) return { ok: false, code: "PACKAGE_GONE", currentVersionId: pub.version.id };
 
   const snapshot: InquirySnapshot = {
-    customerName: pub.customerName,
+    kind: pub.kind,
+    customerName: pub.version.customerName,
     agreementLabel: pub.content.agreementLabel,
     versionNumber: pub.version.number,
     package: pkg,
@@ -59,7 +68,8 @@ export async function submitInquiry(args: {
       const base = {
         id: crypto.randomUUID(),
         reference: randomReference(),
-        customerId: pub.customerId,
+        customerId,
+        kind: pub.kind,
         versionId: pub.version.id,
         packageId: pkg ? pkg.id : OTHER_PACKAGE,
         snapshot: JSON.stringify(snapshot),

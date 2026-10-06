@@ -19,7 +19,7 @@ async function main() {
   let obos = await db.customer.findFirst({ where: { name: "OBOS" } });
   if (!obos) {
     obos = await createCustomer("OBOS");
-    await db.customerDraft.update({ where: { customerId: obos.id }, data: { content: JSON.stringify(obosContent()) } });
+    await db.portalDraft.update({ where: { portalId: (await db.portal.findUniqueOrThrow({ where: { customerId_kind: { customerId: obos.id, kind: "photo" } } })).id }, data: { content: JSON.stringify(obosContent()) } });
     const r = await publish(obos.id);
     if (!r.ok) throw new Error(r.problems.join(" "));
     console.log("OBOS opprettet og publisert som versjon 1. Logg inn i administrasjonen for å kopiere kundelenken.");
@@ -29,7 +29,7 @@ async function main() {
 
   if (process.env.SEED_DEMO_INQUIRIES === "1") {
     const token = await getRawToken(obos.id);
-    const cur = await db.customer.findUnique({ where: { id: obos.id } });
+    const cur = await db.portal.findUnique({ where: { customerId_kind: { customerId: obos.id, kind: "photo" } } });
     if (token && cur?.currentVersionId) {
       const info = { token, versionId: cur.currentVersionId };
       const demos = [
