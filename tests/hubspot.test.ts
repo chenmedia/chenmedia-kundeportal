@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/server/db";
 import { submitInquiry, deleteInquiriesByEmail } from "@/server/inquiries";
-import { processCrmSync, retryOutstandingCrmSyncs, hubspotDealUrl } from "@/server/hubspot";
+import { processCrmSync, retryOutstandingCrmSyncs, hubspotDealUrl, dealName, endOfMonthCloseDate } from "@/server/hubspot";
+import type { InquirySnapshot } from "@/lib/inquiry";
 import { ensureHubspotSetup, PROPERTIES } from "@/server/hubspot-setup";
 import { makePublished, validInput } from "./helpers";
 
@@ -38,7 +39,12 @@ function fakeHubspot() {
     const id = () => String(++s.n);
     if (path === "/crm/v3/objects/contacts/search") return json({ results: find(s.contacts, "email", body.filterGroups[0].filters[0].value) });
     if (path === "/crm/v3/objects/companies/search") return json({ results: find(s.companies, "name", body.filterGroups[0].filters[0].value) });
-    if (path === "/crm/v3/objects/deals/search") return json({ results: find(s.deals, "kundeportal_referanse", body.filterGroups[0].filters[0].value) });
+    if (path === "/crm/v3/objects/deals/search") {
+      const f = body.filterGroups[0].filters;
+      // Eksisterende kunde: vunnet deal på selskapet.
+      if (f[0].propertyName === "associations.company") return json({ results: s.deals.filter((d) => d.wonCompany === f[0].value).slice(0, 1).map((d) => ({ id: d.id })) });
+      return json({ results: find(s.deals, "kundeportal_referanse", f[0].value) });
+    }
     if (path === "/crm/v3/objects/contacts" && method === "POST") { const r = { id: id(), ...body.properties }; s.contacts.push(r); return json({ id: r.id }, 201); }
     if (path === "/crm/v3/objects/companies" && method === "POST") { const r = { id: id(), ...body.properties }; s.companies.push(r); return json({ id: r.id }, 201); }
     if (path === "/crm/v3/objects/deals" && method === "POST") { const r = { id: id(), ...body.properties }; s.deals.push(r); return json({ id: r.id }, 201); }
@@ -115,6 +121,41 @@ describe("HubSpot: overføring", () => {
     expect(hs.tasks[0].properties).toMatchObject({ hubspot_owner_id: "555", hs_task_priority: "HIGH" });
     expect(row.taskId).toBe(hs.tasks[0].id);
     expect((await db.customer.findUniqueOrThrow({ where: { id: customer.id } })).hubspotCompanyId).toBe(row.companyId);
+  });
+
+  it("setter dealfeltene: navn, steg, prioritet, sluttdato for måneden og ny kunde", async () => {
+    enableHubspot();
+    const hs = fakeHubspot();
+    const { r } = await submit("Fotofest AS", { eventName: "Sommerfest", eventDate: "2099-06-15" });
+    await processCrmSync(r.inquiryId);
+    const d = hs.deals[0];
+    expect(d.dealname).toBe("Fotofest AS // Sommerfest - EVENTPHOTO - 15.06.2099");
+    expect(d).toMatchObject({ pipeline: "default", dealstage: "appointmentscheduled", hs_priority: "medium", dealtype: "newbusiness", hubspot_owner_id: "555" });
+    expect(d.closedate).toBe(endOfMonthCloseDate());
+    expect(new Date(d.closedate).getTime()).toBeGreaterThan(Date.now() - 86400_000);
+    expect(hs.assoc.some((a) => a.startsWith("deals/") && a.includes("/associations/default/contacts/"))).toBe(true);
+  });
+
+  it("markerer dealen som eksisterende kunde når selskapet har en vunnet deal fra før", async () => {
+    enableHubspot();
+    const hs = fakeHubspot();
+    hs.companies.push({ id: "co9", name: "Gammel Kunde AS" });
+    hs.deals.push({ id: "won1", wonCompany: "co9" });
+    const { r } = await submit("Gammel Kunde AS");
+    await processCrmSync(r.inquiryId);
+    expect(hs.deals.find((d) => d.id !== "won1")!.dealtype).toBe("existingbusiness");
+  });
+
+  it("bruker EVENTFILM for filmpakker og «dato ikke avklart» uten dato", () => {
+    const snap = { customerName: "Film AS", package: { name: "Eventfilm 1 dag", description: "" } } as unknown as InquirySnapshot;
+    expect(dealName({ eventName: "Lansering", eventDate: null, dateUnknown: true }, snap)).toBe("Film AS // Lansering - EVENTFILM - dato ikke avklart");
+  });
+
+  it("sluttdato er siste dag i måneden etter norsk tid", () => {
+    expect(endOfMonthCloseDate(new Date("2026-10-06T10:00:00Z"))).toBe("2026-10-31T00:00:00.000Z");
+    expect(endOfMonthCloseDate(new Date("2026-02-10T10:00:00Z"))).toBe("2026-02-28T00:00:00.000Z");
+    // 31. desember kl. 23:30 UTC er allerede 1. januar i Oslo.
+    expect(endOfMonthCloseDate(new Date("2026-12-31T23:30:00Z"))).toBe("2027-01-31T00:00:00.000Z");
   });
 
   it("bruker eksisterende kontakt og selskap uten å endre dem eller opprette duplikater", async () => {

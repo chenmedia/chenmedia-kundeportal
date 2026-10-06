@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { appUrl } from "./app-url";
 import { logError } from "./log";
-import { formatCalendarDate, formatPackagePrice } from "@/lib/format";
+import { formatCalendarDate, formatPackagePrice, todayInOslo } from "@/lib/format";
 import type { InquirySnapshot } from "@/lib/inquiry";
 import type { Customer, Inquiry } from "@prisma/client";
 
@@ -136,7 +136,32 @@ function dealDescription(i: Inquiry, s: InquirySnapshot): string {
   ].filter((l): l is string => l !== null).join("\n");
 }
 
-async function ensureDeal(i: Inquiry, s: InquirySnapshot): Promise<string> {
+/** «SELSKAP // ARRANGEMENT - EVENTPHOTO eller EVENTFILM - DATO». Dato som dd.mm.åååå, eller «dato ikke avklart». */
+export function dealName(i: Pick<Inquiry, "eventName" | "eventDate" | "dateUnknown">, s: InquirySnapshot): string {
+  const kind = s.package && /film|video/i.test(`${s.package.name} ${s.package.description ?? ""}`) ? "EVENTFILM" : "EVENTPHOTO";
+  const date = i.dateUnknown || !i.eventDate ? "dato ikke avklart" : i.eventDate.split("-").reverse().join(".");
+  return `${s.customerName} // ${i.eventName} - ${kind} - ${date}`.slice(0, 250);
+}
+
+/** Siste dag i inneværende måned (norsk tid), som midnatt UTC: forventet closedate. */
+export function endOfMonthCloseDate(now: Date = new Date()): string {
+  const [y, m] = todayInOslo(now).split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString();
+}
+
+/** Eksisterende kunde = selskapet har vunnet minst én deal i HubSpot fra før. Ellers ny kunde. */
+async function dealType(companyId: string): Promise<"newbusiness" | "existingbusiness"> {
+  const r = await hs("POST", "/crm/v3/objects/deals/search", {
+    filterGroups: [{ filters: [
+      { propertyName: "associations.company", operator: "EQ", value: companyId },
+      { propertyName: "hs_is_closed_won", operator: "EQ", value: "true" },
+    ] }],
+    properties: ["dealname"], limit: 1,
+  });
+  return firstId(r) ? "existingbusiness" : "newbusiness";
+}
+
+async function ensureDeal(i: Inquiry, s: InquirySnapshot, companyId: string): Promise<string> {
   const existing = firstId(await hs("POST", "/crm/v3/objects/deals/search", {
     filterGroups: [{ filters: [{ propertyName: "kundeportal_referanse", operator: "EQ", value: i.reference }] }],
     properties: ["kundeportal_referanse"], limit: 1,
@@ -146,9 +171,12 @@ async function ensureDeal(i: Inquiry, s: InquirySnapshot): Promise<string> {
   const owner = process.env.HUBSPOT_OWNER_ID;
   const r = await hs("POST", "/crm/v3/objects/deals", {
     properties: {
-      dealname: `${i.eventName} – ${s.customerName}`.slice(0, 250),
+      dealname: dealName(i, s),
       pipeline: hubspotPipelineId(),
       dealstage: hubspotStageId(),
+      closedate: endOfMonthCloseDate(),
+      dealtype: await dealType(companyId),
+      hs_priority: "medium",
       ...(owner ? { hubspot_owner_id: owner } : {}),
       // «Fra»-priser er en nedre grense, ikke et beløp: bare fastpris settes som dealbeløp.
       ...(pkg && pkg.priceType === "fixed" && pkg.priceOre !== null ? { amount: String(pkg.priceOre / 100) } : {}),
@@ -221,7 +249,7 @@ async function runSteps(row: SyncRow) {
     throw e;
   }
 
-  const dealId = row.dealId ?? (await ensureDeal(inquiry, snapshot));
+  const dealId = row.dealId ?? (await ensureDeal(inquiry, snapshot, companyId));
   if (!row.dealId) await save({ dealId });
   await associate("deals", dealId, "contacts", contactId);
   await associate("deals", dealId, "companies", companyId);

@@ -154,8 +154,12 @@ så og beskytter mot utdaterte versjoner. Etter innsending overføres forespørs
 
 1. Kontakten finnes på e-post, ellers opprettes den. Eksisterende kontakter endres aldri.
 2. Selskapet finnes på kundenavn (oldest first), ellers opprettes det. ID-en bufres på kunden.
-3. Det opprettes en deal i «Sales Pipeline» på steget «PRESENTATION - OPPORTUNITY IDENTIFIED», koblet til kontakt og selskap, med
-   pakke, avtaleversjon, dato, sted og lenke tilbake til admin. Beløp settes bare for fastpris.
+3. Det opprettes en deal i «Sales Pipeline» på steget «PRESENTATION - OPPORTUNITY IDENTIFIED», koblet til kontakten (på
+   e-post) og selskapet, med:
+   - navn `SELSKAP // ARRANGEMENT - EVENTPHOTO - DD.MM.ÅÅÅÅ` (EVENTFILM hvis pakken nevner film/video, «dato ikke avklart» uten dato)
+   - closedate = siste dag i inneværende måned (norsk tid), prioritet «Medium»
+   - deal type «Existing Business» hvis selskapet har en vunnet deal i HubSpot fra før, ellers «New Business»
+   - beløp bare for fastpris-pakker (skjemaet har ikke et budsjettfelt), pluss pakke, avtaleversjon, dato, sted og lenke tilbake til admin
 4. Er `HUBSPOT_OWNER_ID` satt, eier den personen dealen og får en oppgave. HubSpot varsler da etter egne
    varslingsinnstillinger (sjekk *Innstillinger → Varsler* for deal- og oppgavetildeling). Teamvarselet på e-post
    sendes da ikke fra portalen; kvitteringen til kunden sendes som før.
