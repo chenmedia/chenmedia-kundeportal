@@ -43,7 +43,7 @@ async function main() {
             packageId: d.pkg, eventName: d.name, dateUnknown: d.pkg === "other", eventDate: d.pkg === "other" ? "" : "2099-06-15",
             locationUnknown: d.pkg === "other", location: d.pkg === "other" ? "" : "Oslo",
             timeframe: "", description: "Dette er en fiktiv eksempelforespørsel lagt inn av seed-skriptet.",
-            contactName: d.who, contactEmail: d.email, contactPhone: "", express: false, printUse: false,
+            contactName: d.who, contactEmail: d.email, contactPhone: "", express: false, printUse: false, service: "both",
           },
         });
       }

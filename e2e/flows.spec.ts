@@ -443,7 +443,7 @@ test("lenkeforhåndsvisning er nøytral: ingen kundenavn eller priser i metadata
   const og = await page.locator('meta[property="og:title"], meta[property="og:description"]').evaluateAll((els) => els.map((e) => e.getAttribute("content") ?? ""));
   expect(og.join(" ")).toContain("Chen Media");
   expect(og.join(" ")).not.toMatch(/OBOS|kr\b|\d{3}/);
-  expect(await page.title()).toBe("Fotopakker og priser | Chen Media");
+  expect(await page.title()).toBe("Pakker og priser | Chen Media");
   const img = await page.request.get("/brand/og.png");
   expect(img.status()).toBe(200);
 });
@@ -566,4 +566,80 @@ test("admin: gjenopprett versjon som utkast, og vern mot samtidige endringer", a
   await page.getByRole("button", { name: "Lagre utkast" }).first().click();
   await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
   await expect(page.getByText(/lagret av noen andre/)).toHaveCount(0);
+});
+
+test("foto- og filmpakker på samme side: faner, egne tillegg, utskrift og forespørsel", async ({ page, browser }) => {
+  await adminLogin(page);
+  await page.getByRole("link", { name: "Opprett kunde" }).click();
+  await page.waitForURL("**/admin/kunder/ny");
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel("Kundenavn").fill("Fanetest AS");
+  await page.getByRole("button", { name: "Opprett kunde" }).click();
+  await expect(page.getByRole("heading", { name: "Fanetest AS" })).toBeVisible({ timeout: 20_000 });
+
+  await page.getByLabel("Avtaleetikett").fill("Foto og film V2026");
+  await page.getByLabel("Chen Medias e-post").fill("kai@chenmedia.no");
+  await page.getByRole("button", { name: "+ Legg til fotopakke" }).click();
+  await page.getByRole("button", { name: "+ Legg til filmpakke" }).click();
+  await page.getByLabel("Pakkenavn").nth(0).fill("Fotopakke");
+  await page.getByLabel("Pris (kr, eks. mva.)").nth(0).fill("7000");
+  await page.getByLabel("Pakkenavn").nth(1).fill("Aftermovie");
+  await page.getByLabel("Pris (kr, eks. mva.)").nth(1).fill("18000");
+  await expect(page.getByLabel("Tjeneste").nth(1)).toHaveValue("film");
+  await page.getByRole("button", { name: "+ Legg til tillegg" }).click();
+  await page.getByLabel("Navn", { exact: true }).fill("Drone");
+  await page.getByLabel("Beløp (kr, eks. mva.)").fill("4000");
+  await page.getByLabel("Gjelder", { exact: true }).selectOption("film");
+  await page.getByRole("button", { name: "Lagre utkast" }).first().click();
+  await expect(page.getByText("Utkastet er lagret.").first()).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Publiser" }).click();
+  await expect(page.getByText("Publisert. Kundelenken viser nå den nye versjonen.")).toBeVisible();
+  const link = await page.locator("#cl").inputValue();
+
+  // Kunden starter på foto: filmpakken og filmtillegget er skjult, og tittelen dekker begge
+  const cust = await (await browser.newContext()).newPage();
+  await cust.goto(link);
+  await expect(cust.getByRole("heading", { level: 1 })).toHaveText(/Eventfoto og eventfilm for Fanetest AS/i);
+  await expect(cust.getByTestId("tab-foto")).toHaveAttribute("aria-pressed", "true");
+  await expect(cust.getByText(/^7\s000\skr$/)).toBeVisible();
+  await expect(cust.getByText(/^18\s000\skr$/)).toBeHidden();
+  await expect(cust.getByText("Drone")).toBeHidden();
+
+  await cust.getByTestId("tab-film").click();
+  await expect(cust.getByTestId("tab-film")).toHaveAttribute("aria-pressed", "true");
+  await expect(cust.getByText(/^18\s000\skr$/)).toBeVisible();
+  await expect(cust.getByText(/^7\s000\skr$/)).toBeHidden();
+  await expect(cust.getByText("Drone")).toBeVisible();
+  expect(cust.url()).toContain("tjeneste=film");
+
+  // Direktelenke til fanen, og utskrift viser begge tjenestene
+  await cust.goto(`${link}?tjeneste=film`);
+  await expect(cust.getByTestId("tab-film")).toHaveAttribute("aria-pressed", "true");
+  await cust.emulateMedia({ media: "print" });
+  await expect(cust.getByText(/^7\s000\skr$/)).toBeVisible();
+  await expect(cust.getByText(/^18\s000\skr$/)).toBeVisible();
+  await expect(cust.getByTestId("tab-film")).toBeHidden();
+  await cust.emulateMedia({ media: "screen" });
+
+  // Forespørsel om filmpakken: pakkene er gruppert, og tjenesten følger pakken
+  await cust.getByRole("button", { name: /Forespør denne pakken – Aftermovie/ }).click();
+  await expect(cust.locator("#foresporsel-heading")).toHaveText("Send en forespørsel");
+  await expect(cust.getByLabel("Pakke", { exact: true })).toHaveValue(/pkg_/);
+  await expect(cust.locator("#f-packageId optgroup")).toHaveCount(2);
+  await cust.getByLabel("Arrangementets navn eller type").fill("Lansering film E2E");
+  await cust.getByLabel("Dato", { exact: true }).fill("2099-06-15");
+  await cust.getByLabel("Sted", { exact: true }).fill("Oslo");
+  await cust.getByLabel("Beskrivelse av behovet").fill("Vi trenger en aftermovie fra lanseringen.");
+  await cust.getByLabel("Kontaktperson").fill("Film Testesen");
+  await cust.getByLabel("E-post", { exact: true }).fill("film@example.com");
+  await cust.getByRole("button", { name: "Send forespørsel" }).click();
+  await expect(cust.getByText("Takk! Vi har mottatt forespørselen din.")).toBeVisible();
+
+  await page.goto("/admin/foresporsler?tjeneste=film");
+  const row = page.getByRole("row", { name: /Lansering film E2E/ });
+  await expect(row).toContainText("Eventfilm");
+  await expect(row).toContainText("Fanetest AS");
+  await page.goto("/admin/foresporsler?tjeneste=photo");
+  await expect(page.getByText("Lansering film E2E")).toHaveCount(0);
 });

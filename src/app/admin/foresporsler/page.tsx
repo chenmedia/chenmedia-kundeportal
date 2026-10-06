@@ -3,21 +3,24 @@ import { INQUIRY_MAX, INQUIRY_PAGE, inquiryList } from "@/server/queries";
 import { requireAdmin } from "@/server/admin-auth";
 import { formatCalendarDate, formatDateTime } from "@/lib/format";
 import { STATUS_LABELS, STATUSES, InquirySnapshot } from "@/lib/inquiry";
+import { INQUIRY_KINDS, kindLabel } from "@/lib/service";
 import { StatusBadge } from "@/components/AdminBits";
 import { DeleteByEmailForm } from "@/components/InquiryAdminForms";
 import { emailBodyRetentionDays, inquiryRetentionMonths } from "@/server/retention";
 
-export default async function Inquiries({ searchParams }: { searchParams: Promise<{ status?: string; kunde?: string; epost?: string; q?: string; antall?: string }> }) {
+export default async function Inquiries({ searchParams }: { searchParams: Promise<{ status?: string; kunde?: string; tjeneste?: string; epost?: string; q?: string; antall?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
   const status = STATUSES.includes(sp.status ?? "") ? sp.status : undefined;
   const q = (sp.q ?? "").trim().slice(0, 100);
   const take = Math.min(Math.max(Number(sp.antall) || INQUIRY_PAGE, INQUIRY_PAGE), INQUIRY_MAX);
-  const filters = { status, customerId: sp.kunde || undefined, failedEmail: sp.epost === "feilet", q: q || undefined };
+  const kind = (INQUIRY_KINDS as readonly string[]).includes(sp.tjeneste ?? "") ? sp.tjeneste : undefined;
+  const filters = { status, customerId: sp.kunde || undefined, kind, failedEmail: sp.epost === "feilet", q: q || undefined };
   const { customers, list, total } = await inquiryList(filters, take);
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   if (sp.kunde) params.set("kunde", sp.kunde);
+  if (kind) params.set("tjeneste", kind);
   if (sp.epost === "feilet") params.set("epost", "feilet");
   if (q) params.set("q", q);
   const exportHref = `/admin/foresporsler/eksport${params.size ? `?${params}` : ""}`;
@@ -45,6 +48,13 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+        <div>
+          <label htmlFor="tjeneste" className="field-label">Tjeneste</label>
+          <select id="tjeneste" name="tjeneste" defaultValue={kind ?? ""} className="input !w-auto">
+            <option value="">Alle</option>
+            {INQUIRY_KINDS.map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
+          </select>
+        </div>
         <label className="check text-sm pb-3">
           <input type="checkbox" name="epost" value="feilet" defaultChecked={sp.epost === "feilet"} />
           <span>Bare med feilet e-post</span>
@@ -60,11 +70,11 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
       </p>
 
       {list.length === 0 ? (
-        <p className="card p-6 text-muted">Ingen forespørsler {status || sp.kunde || sp.epost || q ? "matcher filteret" : "ennå"}. Nye forespørsler fra kundesidene vises her.</p>
+        <p className="card p-6 text-muted">Ingen forespørsler {status || sp.kunde || kind || sp.epost || q ? "matcher filteret" : "ennå"}. Nye forespørsler fra kundesidene vises her.</p>
       ) : (
         <div className="card p-4 overflow-x-auto">
           <table className="tbl text-[15px]">
-            <thead><tr className="eyebrow"><th>Kunde</th><th>Arrangement</th><th>Dato</th><th>Pakke</th><th>Innsendt</th><th>Status</th></tr></thead>
+            <thead><tr className="eyebrow"><th>Kunde</th><th>Tjeneste</th><th>Arrangement</th><th>Dato</th><th>Pakke</th><th>Innsendt</th><th>Status</th></tr></thead>
             <tbody>
               {list.map((i) => {
                 const snap = JSON.parse(i.snapshot) as InquirySnapshot;
@@ -72,6 +82,7 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
                 return (
                   <tr key={i.id}>
                     <td>{i.customer.name}</td>
+                    <td>{kindLabel(i.kind)}</td>
                     <td><Link className="link font-semibold" href={`/admin/foresporsler/${i.id}`}>{i.eventName}</Link><span className="block text-xs mono-num text-muted">{i.reference}</span></td>
                     <td>{i.eventDate ? formatCalendarDate(i.eventDate) : "Ikke avklart"}</td>
                     <td>{snap.package?.name ?? "Annet behov"}</td>

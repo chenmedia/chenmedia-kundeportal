@@ -1,7 +1,7 @@
 # Chen Media Kundepriser (beta)
 
-Digitale kundeprislister for eventfoto. Chen Media setter opp én fast lenke per kunde med
-forhåndsavtalte pakker, tillegg og vilkår. Kunden ser prisene og sender en strukturert forespørsel
+Digitale kundeprislister for eventfoto og eventfilm. Chen Media setter opp én fast lenke per kunde med
+forhåndsavtalte pakker, tillegg og vilkår, med både eventfoto- og eventfilmpakker på samme side (som faner). Kunden ser prisene og sender en strukturert forespørsel
 fra samme side. Erstatter PDF-en og den løse e-postprosessen.
 
 Status: **beta / første fungerende utkast. Ikke produksjonsklar** (se «Før drift»).
@@ -44,6 +44,8 @@ npm run dev                 # http://localhost:3000
   satt brukes Supabase Storage i stedet (samme kode som i drift).
 
 ## Administrasjon (utvalg)
+
+- **Eventfoto og eventfilm:** hver pakke er enten foto eller film (feltet «Tjeneste»), og hvert tillegg gjelder foto, film eller begge. Har kunden begge typer, viser kundesiden faner mellom dem, og tittel og tekster tilpasses. Det er fortsatt én lenke, ett utkast og én publisering per kunde. Forespørsler merkes med tjeneste, og listen og CSV kan filtreres på den.
 
 - **Forespørsler:** søk (arrangement, kontaktperson, e-post, referanse, kunde), filter på status/kunde/feilet e-post, «Vis flere» (100 om gangen) og CSV-eksport av alle treff (`/admin/foresporsler/eksport`, semikolon + UTF-8 for norsk Excel, celler som starter med `= + - @` får apostrof mot formelinjeksjon). Statuser: Ny, Under oppfølging, Avklart, Booket, Tapt, Avsluttet.
 - **Utkast:** lagring avvises hvis noen andre har lagret i mellomtiden (annen fane eller administrator). Du kan da laste siden på nytt eller velge «Lagre og overskriv».

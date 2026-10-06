@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { INQUIRY_KINDS, SERVICE_KINDS } from "./service";
 
 /** Priser lagres som heltall i øre. */
-export const MAX_PACKAGES = 6;
+export const MAX_PACKAGES = 12; // inntil 6 per tjeneste vises pent som en rad av kort
 export const MAX_GALLERY = 6;
 
 const optionalText = (max: number) => z.string().trim().max(max).default("");
@@ -9,6 +10,8 @@ const optionalText = (max: number) => z.string().trim().max(max).default("");
 const packageSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().max(80).default(""),
+  /** Tjenesten pakken gjelder: eventfoto (standard, også for innhold publisert før film ble lagt til) eller eventfilm */
+  kind: z.enum(SERVICE_KINDS).default("photo"),
   priceType: z.enum(["fixed", "from"]).default("fixed"),
   priceOre: z.number().int().min(0).nullable().default(null),
   /** Forklaring, påkrevd for fra-pris */
@@ -42,6 +45,8 @@ const addonSchema = z.object({
   amountOre: z.number().int().min(0).nullable().default(null),
   percent: z.number().min(0).max(1000).nullable().default(null),
   note: optionalText(300),
+  /** Vises for foto, film eller begge (standard) */
+  appliesTo: z.enum(INQUIRY_KINDS).default("both"),
 });
 export type AddonContent = z.infer<typeof addonSchema>;
 
@@ -73,11 +78,6 @@ export const contentSchema = z.object({
 });
 export type Content = z.infer<typeof contentSchema>;
 
-export const DEFAULT_INTRO =
-  "Her finner du deres avtalte fotopakker og priser. Send oss informasjon om arrangementet, så avklarer vi tilgjengelighet og detaljer.";
-export const DEFAULT_CTA = "Send et fotobehov";
-export const DEFAULT_GALLERY_TITLE = "Bilder fra oppdrag";
-
 /** Alle bilder innholdet bruker (hero, pakker, galleri), uten duplikater. Styrer hva kundelenken får servere. */
 export function contentImageIds(content: Content): string[] {
   const ids = [content.heroImageId, ...content.packages.map((p) => p.imageId), ...content.gallery.map((g) => g.imageId)];
@@ -99,8 +99,9 @@ export function newId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Tomt innhold. Tittel, introduksjon og knappetekst står tomme og får standardtekster ut fra tjenestene kunden tilbyr (service.ts). */
 export function emptyContent(): Content {
-  return contentSchema.parse({ introText: DEFAULT_INTRO, ctaLabel: DEFAULT_CTA });
+  return contentSchema.parse({});
 }
 
 export function parseContent(json: string): Content {
@@ -140,11 +141,12 @@ export function publishProblems(content: Content, customerName: string, needsRen
     if (pk.priceType === "from" && !pk.priceNote.trim() && !pk.description.trim())
       p.push(`${n}: fra-pris krever en forklarende tekst.`);
   });
+  // Samme navn går an på en fotopakke og en filmpakke, men ikke to ganger i samme tjeneste.
   const seen = new Set<string>();
   const reported = new Set<string>();
   for (const pk of content.packages) {
     const nm = pk.name.trim();
-    const key = nm.toLowerCase();
+    const key = `${pk.kind}:${nm.toLowerCase()}`;
     if (!nm) continue;
     if (seen.has(key) && !reported.has(key)) { p.push(`To pakker heter «${nm}». Gi dem ulike navn.`); reported.add(key); }
     seen.add(key);

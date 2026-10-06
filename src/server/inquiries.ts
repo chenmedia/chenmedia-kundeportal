@@ -6,6 +6,7 @@ import { allow } from "./rate-limit";
 import { resolvePublished } from "./customers";
 import { buildEmails, notifyAddress, processInquiryJobs } from "./email";
 import { InquiryInput, InquirySnapshot, OTHER_PACKAGE } from "@/lib/inquiry";
+import { offeredKinds, type InquiryKind } from "@/lib/service";
 
 export type SubmitResult =
   | { ok: true; reference: string; packageName: string; eventName: string; eventDate: string | null; duplicate: boolean }
@@ -39,7 +40,12 @@ export async function submitInquiry(args: {
   const pkg = i.packageId === OTHER_PACKAGE ? null : pub.content.packages.find((p) => p.id === i.packageId) ?? null;
   if (i.packageId !== OTHER_PACKAGE && !pkg) return { ok: false, code: "PACKAGE_GONE", currentVersionId: pub.version.id };
 
+  // Tjenesten følger pakken. Uten pakke avgjør kundens valg, men bare mellom det kunden faktisk tilbys (ett tilbud gir det tilbudet).
+  const offered = offeredKinds(pub.content);
+  const kind: InquiryKind = pkg ? pkg.kind : offered.length === 1 ? offered[0] : i.service;
+
   const snapshot: InquirySnapshot = {
+    kind,
     customerName: pub.customerName,
     agreementLabel: pub.content.agreementLabel,
     versionNumber: pub.version.number,
@@ -60,6 +66,7 @@ export async function submitInquiry(args: {
         id: crypto.randomUUID(),
         reference: randomReference(),
         customerId: pub.customerId,
+        kind,
         versionId: pub.version.id,
         packageId: pkg ? pkg.id : OTHER_PACKAGE,
         snapshot: JSON.stringify(snapshot),

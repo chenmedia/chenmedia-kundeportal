@@ -74,6 +74,21 @@ body.admin { background: #f7f6ec; }
   border: 2px solid transparent; cursor: pointer; text-decoration: none;
   transition: background-color .15s, color .15s;
 }
+/* Faner mellom foto- og filmpakker på kundesiden. Den andre tjenestens innhold skjules bare på skjerm, så utskrift viser alt. */
+.tab {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 999px;
+  font-family: var(--font-body); font-weight: 700; font-size: 15px; text-decoration: none; cursor: pointer;
+  border: 2px solid var(--color-ink); color: var(--color-ink); background: transparent;
+  transition: background-color .15s, color .15s;
+}
+.tab:hover { background: #fff; }
+.tab[aria-pressed="true"] { background: var(--color-ink); color: #fff; }
+.kind-heading { display: none; }
+@media screen {
+  .kind-scope[data-active-kind="photo"] [data-kind="film"],
+  .kind-scope[data-active-kind="film"] [data-kind="photo"] { display: none; }
+}
+@media print { .kind-heading { display: block; } }
 .btn-accent { background: var(--color-accent-strong); color: #fff; }
 .btn-accent:hover { background: var(--color-accent-dark); }
 .btn-dark { background: var(--color-ink); color: #fff; }
@@ -222,10 +237,12 @@ dialog.request-dialog::backdrop { background: rgba(17,17,17,.6); backdrop-filter
   /* Pakker: tre kort side om side */
   .packages-section > div:first-child { display: flex !important; break-after: avoid; }
   .packages-section > div:first-child > p { max-width: 70mm !important; font-size: 8pt !important; }
-  #pakker > ul { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 4mm !important; margin-top: 4mm !important; }
+  #pakker .kind-group { margin-top: 0 !important; }
+  #pakker .kind-heading { font-size: 11pt !important; margin: 4mm 0 0 !important; break-after: avoid; }
+  #pakker .pkg-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 4mm !important; margin-top: 4mm !important; }
   /* Ett og to kort fyller bredden, fire blir 2 × 2 (ikke 3 + 1) */
-  #pakker > ul:has(> li:only-child) { grid-template-columns: 1fr !important; }
-  #pakker > ul:has(> li:nth-child(2):last-child), #pakker > ul:has(> li:nth-child(4):last-child) { grid-template-columns: repeat(2, 1fr) !important; }
+  #pakker .pkg-grid:has(> li:only-child) { grid-template-columns: 1fr !important; }
+  #pakker .pkg-grid:has(> li:nth-child(2):last-child), #pakker .pkg-grid:has(> li:nth-child(4):last-child) { grid-template-columns: repeat(2, 1fr) !important; }
   .pkg-card { display: block !important; overflow: visible !important; break-inside: avoid; transform: none !important; }
   .pkg-body { display: block !important; padding: 4.5mm !important; }
   .pkg-head h3 { font-size: 12pt !important; }

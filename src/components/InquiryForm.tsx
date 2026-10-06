@@ -6,11 +6,17 @@ import { formatCalendarDate, todayInOslo } from "@/lib/format";
 import { inquiryInputSchema, OTHER_PACKAGE } from "@/lib/inquiry";
 import { SELECT_EVENT } from "./form-events";
 import { mailtoHref } from "@/lib/content";
+import { SERVICES, type InquiryKind, type ServiceKind } from "@/lib/service";
 
 interface Props {
   token?: string;
   versionId: string;
-  packages: { id: string; name: string; custom: boolean; priceText: string }[];
+  packages: { id: string; name: string; kind: ServiceKind; custom: boolean; priceText: string }[];
+  /** Tjenestene kunden tilbyr. Med både foto og film grupperes pakkene, og «annet behov» spør hva det gjelder. */
+  kinds: ServiceKind[];
+  /** Overskrift i skjemaet, og om «bruk av bilder i trykk» skal tilbys (bare med fotopakker). */
+  heading: string;
+  showPrintUse: boolean;
   disabledReason?: string;
   emailConfigured: boolean;
   contactEmail: string;
@@ -20,6 +26,7 @@ interface Props {
 
 interface Values {
   packageId: string;
+  service: InquiryKind;
   eventName: string;
   dateUnknown: boolean;
   eventDate: string;
@@ -35,7 +42,7 @@ interface Values {
 }
 
 const INITIAL: Values = {
-  packageId: "", eventName: "", dateUnknown: false, eventDate: "", locationUnknown: false, location: "",
+  packageId: "", service: "both", eventName: "", dateUnknown: false, eventDate: "", locationUnknown: false, location: "",
   timeframe: "", description: "", contactName: "", contactEmail: "", contactPhone: "", express: false, printUse: false,
 };
 
@@ -186,7 +193,7 @@ export function InquiryForm(props: Props) {
 
   return (
     <form onSubmit={onSubmit} noValidate aria-busy={sending}>
-      <h2 id="foresporsel-heading" tabIndex={-1} className="display text-2xl md:text-3xl outline-none">Send et fotobehov</h2>
+      <h2 id="foresporsel-heading" tabIndex={-1} className="display text-2xl md:text-3xl outline-none">{props.heading}</h2>
       <p className="mt-2 text-muted">Det tar omtrent to minutter. Du trenger ikke oppgi bedrift, vi vet hvem du er. Lukker du skjemaet, beholdes teksten din.</p>
 
       {disabled && props.disabledReason && (
@@ -246,10 +253,26 @@ export function InquiryForm(props: Props) {
           <select id="f-packageId" className="input" value={v.packageId} onChange={(e) => set("packageId", e.target.value)}
             aria-invalid={inv("packageId")} aria-describedby={desc("packageId")}>
             <option value="">Velg pakke …</option>
-            {props.packages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {props.kinds.length > 1
+              ? props.kinds.map((k) => (
+                  <optgroup key={k} label={SERVICES[k].packagesHeading}>
+                    {props.packages.filter((p) => p.kind === k).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </optgroup>
+                ))
+              : props.packages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             <option value={OTHER_PACKAGE}>Usikker / annet behov</option>
           </select>
           <ErrorText id="err-packageId" msg={errors.packageId} />
+          {props.kinds.length > 1 && v.packageId === OTHER_PACKAGE && (
+            <div className="mt-4">
+              <label htmlFor="f-service" className="field-label">Gjelder behovet</label>
+              <select id="f-service" className="input" value={v.service} onChange={(e) => set("service", e.target.value as InquiryKind)}>
+                <option value="both">Foto og film, eller usikker</option>
+                <option value="photo">{SERVICES.photo.label}</option>
+                <option value="film">{SERVICES.film.label}</option>
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="md:col-span-2">
@@ -301,10 +324,12 @@ export function InquiryForm(props: Props) {
             <input type="checkbox" checked={v.express} onChange={(e) => set("express", e.target.checked)} />
             <span>Ønsker levering innen 24 timer</span>
           </label>
-          <label className="check text-[15px]">
-            <input type="checkbox" checked={v.printUse} onChange={(e) => set("printUse", e.target.checked)} />
-            <span>Ønsker å avklare bruk av bilder i trykk</span>
-          </label>
+          {props.showPrintUse && (
+            <label className="check text-[15px]">
+              <input type="checkbox" checked={v.printUse} onChange={(e) => set("printUse", e.target.checked)} />
+              <span>Ønsker å avklare bruk av bilder i trykk</span>
+            </label>
+          )}
           <p className="field-hint">Tillegg er ønsker som avklares i tilbudet. De er ikke bestilt før Chen Media har bekreftet.</p>
         </div>
 

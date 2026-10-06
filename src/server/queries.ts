@@ -42,7 +42,7 @@ export async function dashboardData(search: string) {
   return { customers, newInquiries, failedJobs, newCountByCustomer: new Map(newCounts.map((c) => [c.customerId, c._count])) };
 }
 
-export interface InquiryFilters { status?: string; customerId?: string; failedEmail?: boolean; q?: string }
+export interface InquiryFilters { status?: string; customerId?: string; kind?: string; failedEmail?: boolean; q?: string }
 
 /** Felles filter for listen og CSV-eksporten. Søket treffer arrangement, kontaktperson, e-post, referanse og kunde. */
 function inquiryWhere(f: InquiryFilters): Prisma.InquiryWhereInput {
@@ -50,6 +50,7 @@ function inquiryWhere(f: InquiryFilters): Prisma.InquiryWhereInput {
   return {
     ...(f.status ? { status: f.status } : {}),
     ...(f.customerId ? { customerId: f.customerId } : {}),
+    ...(f.kind ? { kind: f.kind } : {}),
     ...(f.failedEmail ? { emailJobs: { some: { status: "failed" } } } : {}),
     ...(q
       ? {

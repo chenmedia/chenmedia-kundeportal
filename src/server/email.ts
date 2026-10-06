@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { formatCalendarDate, formatPackagePrice } from "@/lib/format";
 import { InquirySnapshot } from "@/lib/inquiry";
+import { kindLabel } from "@/lib/service";
 import type { Inquiry } from "@prisma/client";
 import { logError } from "./log";
 
@@ -22,6 +23,7 @@ function details(i: EmailInquiry, s: InquirySnapshot): string {
     : "Usikker / annet behov";
   return [
     `Referanse: ${i.reference}`,
+    `Tjeneste: ${kindLabel(s.kind ?? "photo")}`,
     `Pakke: ${pkg}`,
     `Avtale: ${s.agreementLabel} (versjon ${s.versionNumber})`,
     `Arrangement: ${i.eventName}`,
@@ -42,13 +44,14 @@ function details(i: EmailInquiry, s: InquirySnapshot): string {
 
 export function buildEmails(inq: EmailInquiry, s: InquirySnapshot, notifyTo: string): Draft[] {
   const body = details(inq, s);
+  const tjeneste = kindLabel(s.kind ?? "photo");
   return [
     {
       type: "team_notification",
       recipient: notifyTo,
       replyTo: inq.contactEmail,
-      subject: `Ny forespørsel fra ${s.customerName}: ${inq.eventName} (${inq.reference})`,
-      body: `Ny forespørsel fra ${s.customerName}.\n\n${body}`,
+      subject: `Ny forespørsel (${tjeneste}) fra ${s.customerName}: ${inq.eventName} (${inq.reference})`,
+      body: `Ny forespørsel om ${tjeneste.toLowerCase()} fra ${s.customerName}.\n\n${body}`,
     },
     {
       type: "customer_receipt",

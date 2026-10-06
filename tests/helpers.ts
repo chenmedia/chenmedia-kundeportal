@@ -3,6 +3,12 @@ import { createCustomer, getRawToken, publish } from "@/server/customers";
 import { obosContent } from "@/server/seed-data";
 import { InquiryInput } from "@/lib/inquiry";
 
+/** Utkastraden til en kunde. */
+export const draftOf = (customerId: string) => db.customerDraft.findUniqueOrThrow({ where: { customerId } });
+
+export const setDraftContent = (customerId: string, content: unknown) =>
+  db.customerDraft.update({ where: { customerId }, data: { content: JSON.stringify(content) } });
+
 export async function makeCustomer(name = "Testkunde") {
   const c = await createCustomer(name);
   await db.customerDraft.update({ where: { customerId: c.id }, data: { content: JSON.stringify(obosContent()) } });
@@ -20,7 +26,7 @@ export function validInput(over: Partial<InquiryInput> = {}): InquiryInput {
   return {
     packageId: "pkg_lite", eventName: "Sommerfest", dateUnknown: false, eventDate: "2099-06-15",
     locationUnknown: false, location: "Oslo", timeframe: "", description: "Vi trenger en fotograf til festen.",
-    contactName: "Test Person", contactEmail: "test@example.com", contactPhone: "", express: false, printUse: false, ...over,
+    contactName: "Test Person", contactEmail: "test@example.com", contactPhone: "", express: false, printUse: false, service: "both", ...over,
   };
 }
 

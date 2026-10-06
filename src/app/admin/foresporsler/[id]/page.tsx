@@ -8,6 +8,7 @@ import { StatusBadge, EMAIL_STATUS } from "@/components/AdminBits";
 import { DeleteForm, StatusForm } from "@/components/InquiryAdminForms";
 import { retryEmailAction } from "../../actions";
 import { mailtoHref } from "@/lib/content";
+import { kindLabel } from "@/lib/service";
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (<><dt className="eyebrow pt-1">{k}</dt><dd className="min-w-0 break-words">{children}</dd></>);
@@ -40,13 +41,14 @@ export default async function InquiryDetail({ params }: { params: Promise<{ id: 
         <section className="card p-6 min-w-0" aria-labelledby="innsendt">
           <h2 id="innsendt" className="title text-lg">Innsendte opplysninger</h2>
           <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-[max-content_1fr] text-[15px]">
+            <Row k="Tjeneste">{kindLabel(i.kind)}</Row>
             <Row k="Pakke">{s.package ? s.package.name : "Usikker / annet behov"}</Row>
             <Row k="Dato">{i.dateUnknown || !i.eventDate ? "Dato er ikke avklart" : formatCalendarDate(i.eventDate)}</Row>
             <Row k="Sted">{i.locationUnknown || !i.location ? "Sted er ikke avklart" : i.location}</Row>
             {i.timeframe && <Row k="Tidsrom">{i.timeframe}</Row>}
             <Row k="Beskrivelse"><span className="whitespace-pre-wrap">{i.description}</span></Row>
             <Row k="Ekspress">{i.express ? "Ønsker levering innen 24 timer" : "Nei"}</Row>
-            <Row k="Trykk">{i.printUse ? "Ønsker å avklare bruk av bilder i trykk" : "Nei"}</Row>
+            {i.kind !== "film" && <Row k="Trykk">{i.printUse ? "Ønsker å avklare bruk av bilder i trykk" : "Nei"}</Row>}
             <Row k="Kontakt">{i.contactName}</Row>
             <Row k="E-post"><a className="link" href={mailtoHref(i.contactEmail)}>{i.contactEmail}</a></Row>
             {i.contactPhone && <Row k="Telefon">{i.contactPhone}</Row>}

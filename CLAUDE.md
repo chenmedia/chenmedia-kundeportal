@@ -1,6 +1,6 @@
 # Chen Media Kundepriser
 
-Digitale kundeprislister for eventfoto. Kunden får en hemmelig lenke (`/k/<token>`), ser pakker og priser, og sender en forespørsel. Administrator (Chen Media) styrer alt under `/admin`. Se `README.md` for oppsett, miljøvariabler og drift.
+Digitale kundeprislister for eventfoto og eventfilm. Kunden får én hemmelig lenke (`/k/<token>`), ser pakker og priser (foto og/eller film), og sender en forespørsel. Administrator (Chen Media) styrer alt under `/admin`. Se `README.md` for oppsett, miljøvariabler og drift.
 
 ## Struktur og regler
 
@@ -11,8 +11,15 @@ Digitale kundeprislister for eventfoto. Kunden får en hemmelig lenke (`/k/<toke
   - `customers.ts`, `inquiries.ts` skriving og regler (publisering, innsending, tilgang)
   - `email.ts`, `storage.ts`, `media.ts`, `supabase-auth.ts` adaptere mot eksterne tjenester
   - `log.ts` feillogging uten personopplysninger. Bruk `logError` i alle serverfeil-stier
-- `src/lib/` ren logikk uten databasetilgang: `content.ts` (innholdsmodell og publiseringskrav), `format.ts` (priser og datoer), `inquiry.ts` (skjema og statuser).
+- `src/lib/` ren logikk uten databasetilgang: `content.ts` (innholdsmodell og publiseringskrav), `service.ts` (tjenestene foto/film: tekster og standardverdier), `format.ts` (priser og datoer), `inquiry.ts` (skjema og statuser).
 - `prisma/migrations/` skjemaendringer. Endringer må kjøres mot Supabase før koden som trenger dem slås sammen.
+
+## Eventfoto og eventfilm
+
+- Kunden har én side og én lenke. Hver **pakke** har en `kind` (`photo` | `film`), og hvert **tillegg** en `appliesTo` (`photo` | `film` | `both`). Begge ligger i innholds-JSON-en, så ingen databasemigrering trengs for å utvide dem, og innhold lagret før film fantes leses som eventfoto.
+- Har kunden pakker av begge typer, viser kundesiden faner (Eventfoto | Eventfilm, `KindScope`). Den andre tjenestens pakker og tillegg skjules bare på skjerm. Utskrift og PDF viser alt. `?tjeneste=film` åpner filmfanen.
+- Tekster (tittel, introduksjon, knapp, hint i editoren) avhenger av hvilke tjenester kunden har pakker i og ligger i `src/lib/service.ts` (`pageTexts`, `defaultTexts`). Det admin har skrevet gjelder alltid. Ny tjeneste: legg den til i `SERVICES` og `TEXTS` der.
+- Forespørsler lagrer `kind` (`photo` | `film` | `both`). Tjenesten følger pakken kunden valgte. Uten pakke avgjør kundens valg, men bare når siden har begge tjenestene. Det avgjøres på serveren (`submitInquiry`), aldri fra skjemaet alene.
 
 ## Domeneregler som ikke skal brytes
 

@@ -79,6 +79,7 @@ model Inquiry {
   customer       Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
   versionId      String
   version        PublishedVersion @relation(fields: [versionId], references: [id])
+  kind           String           @default("photo") // photo | film | both (tjenesten forespørselen gjelder)
   packageId      String // pakke-ID eller "other"
   snapshot       String // JSON: kundenavn, pakke, tillegg, vilkår slik kunden så dem
   eventName      String
