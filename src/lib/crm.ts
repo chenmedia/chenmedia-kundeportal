@@ -43,3 +43,15 @@ export function dealPriority(i: PriorityInput): { priority: Priority; score: num
   ].join(", ");
   return { priority, score, reason };
 }
+
+/** Veiledning til administratoren når «Sett opp HubSpot» feiler. Bare feilkoden (http_NNN) brukes, aldri svaret fra HubSpot. */
+export function setupFailureHint(code: string | null): string {
+  switch (code) {
+    case "http_401":
+      return "HubSpot avviste tokenet. Sjekk at HUBSPOT_ACCESS_TOKEN er tilgangstokenet fra appens Auth-fane (starter med pat-), at appen er installert på kontoen, og at verdien er limt inn uten mellomrom eller anførselstegn. Redeploy etter at tokenet er endret.";
+    case "http_403":
+      return "Appen mangler et scope. Sjekk crm.schemas.deals.read/write og de øvrige scopene i README, last opp appen på nytt og godkjenn endringen.";
+    default:
+      return "Sjekk at tokenet virker, at appen har scopes for deals-skjema (crm.schemas.deals.read/write), og at pipeline og steg finnes.";
+  }
+}

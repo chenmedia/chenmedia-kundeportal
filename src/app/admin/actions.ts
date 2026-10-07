@@ -13,6 +13,7 @@ import { hubspotConfigured, processCrmSync } from "@/server/hubspot";
 import { ensureHubspotSetup } from "@/server/hubspot-setup";
 import { contentImageIds, contentSchema, isEmail } from "@/lib/content";
 import { STATUSES } from "@/lib/inquiry";
+import { setupFailureHint } from "@/lib/crm";
 import { processJob } from "@/server/email";
 import { logError } from "@/server/log";
 
@@ -202,9 +203,9 @@ export async function setupHubspotAction(): Promise<ActionState> {
     return { ok: true, message: `${r.created.length ? `Opprettet ${r.created.length} egenskap${r.created.length === 1 ? "" : "er"}. ` : "Alle egenskapene fantes fra før. "}Nye forespørsler havner i «${r.pipelineLabel}», steget «${r.stageLabel}».` };
   } catch (e) {
     logError("hubspot.setup", e);
-    // Bare feilkoden vises: svar fra HubSpot kan inneholde personopplysninger. 403 betyr vanligvis manglende scope.
-    const code = e instanceof Error && /^http_\d+$/.test(e.message) ? ` (${e.message})` : "";
-    return { error: `Oppsettet feilet${code}. Sjekk at appen har scopes for deals-skjema (crm.schemas.deals.read/write), og at pipeline og steg finnes.` };
+    // Bare feilkoden vises: svar fra HubSpot kan inneholde personopplysninger.
+    const code = e instanceof Error && /^http_\d+$/.test(e.message) ? e.message : null;
+    return { error: `Oppsettet feilet${code ? ` (${code})` : ""}. ${setupFailureHint(code)}` };
   }
 }
 
