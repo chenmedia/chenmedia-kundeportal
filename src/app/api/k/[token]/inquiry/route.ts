@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { inquiryInputSchema } from "@/lib/inquiry";
 import { submitInquiry } from "@/server/inquiries";
@@ -7,6 +7,7 @@ import { sameOrigin } from "@/server/admin-auth";
 import { sha256 } from "@/server/crypto";
 import { resolvePublished } from "@/server/customers";
 import { logError } from "@/server/log";
+import { processCrmSync } from "@/server/hubspot";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   try {
     const r = await submitInquiry({ token, versionId: env.data.versionId, idempotencyKey: env.data.idempotencyKey, input: parsed.data });
     if (r.ok) {
+      // Overføringen til HubSpot skjer etter at svaret er sendt, så kunden aldri venter på (eller merker feil i) HubSpot.
+      // Feiler den, tar daglig sveip og «Synk på nytt» i admin den.
+      if (!r.duplicate) after(() => processCrmSync(r.inquiryId).catch((e) => logError("crm.after", e)));
       const { reference, packageName, eventName, eventDate } = r;
       return NextResponse.json({ ok: true, receipt: { reference, packageName, eventName, eventDate } });
     }

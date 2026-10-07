@@ -8,7 +8,9 @@ import { SESSION_COOKIE, login, logout, requireAdmin } from "@/server/admin-auth
 import { clientIp } from "@/server/rate-limit";
 import { parseContactForm } from "@/lib/customer-contact";
 import { DraftConflictError, assetsBelongToCustomer, createCustomer, updateCustomerContact, duplicateCustomer, publish, restoreVersionAsDraft, rotateToken, saveDraft, setActive } from "@/server/customers";
-import { deleteInquiry, deleteInquiriesByEmail, updateInquiryFollowUp } from "@/server/inquiries";
+import { deleteInquiry, deleteInquiriesByEmail, updateInquiryFollowUp, type DeleteByEmailResult } from "@/server/inquiries";
+import { hubspotConfigured, processCrmSync } from "@/server/hubspot";
+import { ensureHubspotSetup } from "@/server/hubspot-setup";
 import { contentImageIds, contentSchema, isEmail } from "@/lib/content";
 import { STATUSES } from "@/lib/inquiry";
 import { processJob } from "@/server/email";
@@ -180,6 +182,32 @@ export async function retryEmailAction(jobId: string, inquiryId: string): Promis
   revalidatePath("/admin");
 }
 
+export async function retryCrmSyncAction(inquiryId: string): Promise<void> {
+  await requireAdmin();
+  try {
+    await processCrmSync(inquiryId);
+  } catch (e) {
+    logError("crm.retry", e, { inquiryId });
+  }
+  revalidatePath(`/admin/foresporsler/${inquiryId}`);
+  revalidatePath("/admin");
+}
+
+/** Oppretter dealegenskapene i HubSpot og sjekker pipeline og steg, med tokenet appen kjører med. Trygt å kjøre flere ganger. */
+export async function setupHubspotAction(): Promise<ActionState> {
+  await requireAdmin();
+  if (!hubspotConfigured()) return { error: "HubSpot er ikke koblet til (HUBSPOT_ACCESS_TOKEN mangler)." };
+  try {
+    const r = await ensureHubspotSetup();
+    return { ok: true, message: `${r.created.length ? `Opprettet ${r.created.length} egenskap${r.created.length === 1 ? "" : "er"}. ` : "Alle egenskapene fantes fra før. "}Nye forespørsler havner i «${r.pipelineLabel}», steget «${r.stageLabel}».` };
+  } catch (e) {
+    logError("hubspot.setup", e);
+    // Bare feilkoden vises: svar fra HubSpot kan inneholde personopplysninger. 403 betyr vanligvis manglende scope.
+    const code = e instanceof Error && /^http_\d+$/.test(e.message) ? ` (${e.message})` : "";
+    return { error: `Oppsettet feilet${code}. Sjekk at appen har scopes for deals-skjema (crm.schemas.deals.read/write), og at pipeline og steg finnes.` };
+  }
+}
+
 export async function updateContactAction(customerId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin();
   const contact = parseContactForm(fd);
@@ -200,16 +228,17 @@ export async function deleteByEmailAction(_prev: ActionState, fd: FormData): Pro
   const email = String(fd.get("email") ?? "").trim();
   if (!isEmail(email)) return { error: "Skriv en gyldig e-postadresse.", values: { email } };
   if (fd.get("confirm") !== "on") return { error: "Kryss av for å bekrefte at alt fra denne adressen skal slettes.", values: { email } };
-  let count: number;
+  let r: DeleteByEmailResult;
   try {
-    count = await deleteInquiriesByEmail(email);
+    r = await deleteInquiriesByEmail(email, { deleteContact: fd.get("deleteContact") === "on" });
   } catch (e) {
     logError("inquiry.delete-by-email", e);
-    return { error: "Kunne ikke slette. Prøv igjen.", values: { email } };
+    return { error: "Kunne ikke slette. Ingenting er slettet hvis HubSpot ikke svarte. Prøv igjen.", values: { email } };
   }
+  const { count } = r;
   revalidatePath("/admin/foresporsler");
   revalidatePath("/admin");
-  return { ok: true, message: count === 0 ? "Fant ingen forespørsler fra denne adressen." : `Slettet ${count} ${count === 1 ? "forespørsel" : "forespørsler"} med tilhørende e-postjobber.` };
+  return { ok: true, message: count === 0 ? "Fant ingen forespørsler fra denne adressen." : `Slettet ${count} ${count === 1 ? "forespørsel" : "forespørsler"} med tilhørende e-postjobber.${r.archivedDeals ? ` Arkiverte ${r.archivedDeals} ${r.archivedDeals === 1 ? "deal" : "dealer"} i HubSpot.` : ""}${r.contactDeleted ? " Kontakten er slettet i HubSpot." : ""}` };
 }
 
 export async function restoreVersionAction(customerId: string, versionNumber: number): Promise<void> {

@@ -6,8 +6,11 @@ import { formatAddonPrice, formatCalendarDate, formatDateTime, formatPackagePric
 import { InquirySnapshot } from "@/lib/inquiry";
 import { StatusBadge, EMAIL_STATUS } from "@/components/AdminBits";
 import { DeleteForm, StatusForm } from "@/components/InquiryAdminForms";
-import { retryEmailAction } from "../../actions";
+import { retryCrmSyncAction, retryEmailAction } from "../../actions";
+import { hubspotDealUrl } from "@/server/hubspot";
 import { mailtoHref } from "@/lib/content";
+
+const CRM_STATUS: Record<string, string> = { pending: "Venter", syncing: "Overfører", synced: "Overført", failed: "Feilet" };
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (<><dt className="eyebrow pt-1">{k}</dt><dd className="min-w-0 break-words">{children}</dd></>);
@@ -82,6 +85,23 @@ export default async function InquiryDetail({ params }: { params: Promise<{ id: 
         <h2 id="oppfolging" className="title text-lg mb-4">Oppfølging</h2>
         <StatusForm id={i.id} status={i.status} notes={i.internalNotes} />
       </section>
+
+      {i.crmSync && (
+        <section className="card p-6" aria-labelledby="hubspot">
+          <h2 id="hubspot" className="title text-lg">HubSpot</h2>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className={`badge ${i.crmSync.status === "failed" ? "!border-err !text-err" : ""}`}>{CRM_STATUS[i.crmSync.status] ?? i.crmSync.status}</span>
+            <span className="text-sm text-muted">{i.crmSync.attempts} forsøk{i.crmSync.errorCategory ? ` · feil: ${i.crmSync.errorCategory}` : ""}</span>
+            {i.crmSync.dealId && hubspotDealUrl(i.crmSync.dealId) && (
+              <a className="link font-semibold" href={hubspotDealUrl(i.crmSync.dealId)!} target="_blank" rel="noopener noreferrer">Åpne dealen i HubSpot</a>
+            )}
+            {i.crmSync.status !== "synced" && i.crmSync.status !== "syncing" && (
+              <form action={retryCrmSyncAction.bind(null, i.id)}><button className="btn btn-dark btn-sm">Synk på nytt</button></form>
+            )}
+          </div>
+          <p className="text-sm text-muted mt-2">Oppfølgingen skjer i HubSpot, der status flyttes manuelt. Oppfølgingsstatusen over endres ikke av det.</p>
+        </section>
+      )}
 
       <section className="card p-6" aria-labelledby="epost">
         <h2 id="epost" className="title text-lg">E-post</h2>

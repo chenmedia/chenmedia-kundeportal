@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { STATUS_LABELS, STATUSES } from "@/lib/inquiry";
-import { deleteByEmailAction, deleteInquiryAction, updateInquiryAction, type ActionState } from "@/app/admin/actions";
+import { deleteByEmailAction, deleteInquiryAction, setupHubspotAction, updateInquiryAction, type ActionState } from "@/app/admin/actions";
 
 export function StatusForm({ id, status, notes }: { id: string; status: string; notes: string }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(updateInquiryAction.bind(null, id), {});
@@ -43,7 +43,7 @@ export function DeleteForm({ id }: { id: string }) {
 }
 
 /** Sletter alt fra én kontaktadresse, for eksempel når noen ber om at opplysningene deres slettes. */
-export function DeleteByEmailForm() {
+export function DeleteByEmailForm({ crmEnabled = false }: { crmEnabled?: boolean }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(deleteByEmailAction, {});
   return (
     <form action={action} className="grid gap-4 max-w-xl">
@@ -56,9 +56,27 @@ export function DeleteByEmailForm() {
         <input type="checkbox" name="confirm" />
         <span>Jeg bekrefter at alt fra denne adressen skal slettes for godt.</span>
       </label>
+      {crmEnabled && (
+        <label className="check text-sm">
+          <input type="checkbox" name="deleteContact" />
+          <span>Slett også kontakten i HubSpot (permanent). La stå av hvis personen er en vanlig kunde som skal beholdes der. Tilknyttede dealer arkiveres uansett.</span>
+        </label>
+      )}
       {state.error && <p role="alert" className="field-error !mt-0">{state.error}</p>}
       {state.ok && <p role="status" className="text-sm font-semibold text-ok">{state.message}</p>}
       <button className="btn btn-outline btn-sm self-start !border-err !text-err hover:!bg-err hover:!text-white" disabled={pending}>Slett alt fra adressen</button>
+    </form>
+  );
+}
+
+/** Oppretter egenskapene dealene trenger i HubSpot (én gang etter at tokenet er satt). */
+export function HubspotSetupForm() {
+  const [state, action, pending] = useActionState<ActionState, FormData>(() => setupHubspotAction(), {});
+  return (
+    <form action={action} className="grid gap-3">
+      {state.error && <p role="alert" className="field-error !mt-0">{state.error}</p>}
+      {state.ok && <p role="status" className="text-sm font-semibold text-ok">{state.message}</p>}
+      <button className="btn btn-dark btn-sm self-start" disabled={pending}>{pending ? "Setter opp …" : "Sett opp HubSpot"}</button>
     </form>
   );
 }

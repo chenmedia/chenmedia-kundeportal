@@ -64,6 +64,7 @@ npm run dev                 # http://localhost:3000
 | `STORAGE_DIR` | Kun lokal utvikling uten Supabase. Virker ikke på Vercel. |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Brukes av seed / `admin:create`. Ingen hardkodet passord finnes. |
 | `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` | Aktiverer ekte e-post via Resend. Tomt = lokal utboks. |
+| `HUBSPOT_*` | Overføring av forespørsler til HubSpot, se «HubSpot». Tomt = av. |
 | `NOTIFY_EMAIL` | Mottaker av varsel om nye forespørsler (faller ellers tilbake til kontakt-e-posten på kundesiden). |
 | `SEED_DEMO_INQUIRIES` | `1` legger inn to eksempelforespørsler ved seed. |
 
@@ -145,6 +146,57 @@ npm run build       # produksjonsbygg
 # E2E (Playwright). Bruker databasen *_e2e og port 3100:
 CHROMIUM_PATH=/sti/til/chromium npx playwright test   # utelat CHROMIUM_PATH hvis `npx playwright install chromium` er kjørt
 ```
+
+## HubSpot
+
+Skjemaet på kundesiden er portalens eget (ikke et HubSpot-skjema), fordi portalen kjenner kunden, låser prisen kunden
+så og beskytter mot utdaterte versjoner. Etter innsending overføres forespørselen server-til-server til HubSpot:
+
+1. Kontakten finnes på e-post, ellers opprettes den. Eksisterende kontakter endres aldri.
+2. Selskapet finnes på kundenavn (oldest first), ellers opprettes det. ID-en bufres på kunden.
+3. Det opprettes en deal i «Sales Pipeline» på steget «PRESENTATION - OPPORTUNITY IDENTIFIED», koblet til kontakten (på
+   e-post) og selskapet, med:
+   - navn `SELSKAP // ARRANGEMENT - EVENTPHOTO - DD/MM/ÅÅÅÅ` (EVENTFILM hvis pakken nevner film/video, «dato ikke avklart» uten dato)
+   - closedate = siste dag i inneværende måned (norsk tid)
+   - beløp = pakkeprisen. Ved «fra»-pris er det minstebeløpet, og det merkes i egenskapen «Kundeportal: pristype»
+     («Fra-pris (minstebeløp, ikke endelig)») og i beskrivelsen. «Usikker / annet behov» gir ingen verdi.
+   - deal type «Existing Business» hvis selskapet har minst én vunnet deal i HubSpot fra før, ellers «New Business»
+   - prioritet beregnes automatisk (`src/lib/crm.ts`, terskler øverst i filen) og begrunnes i beskrivelsen. Poeng for
+     budsjett (≥ 30 000 kr: +2, ≥ 10 000 kr: +1, lavere: −1, ukjent: 0) og for kunden (≥ 3 vunne deals eller LTV ≥ 100 000 kr: +2,
+     minst én vunnet deal: +1). Sum ≥ 3 = høy, ≤ −1 = lav, ellers middels. LTV er samlet beløp på selskapets vunne deals
+     (leser inntil 100) og regnes ut fra HubSpot ved hver forespørsel, så det følger med når du markerer deals som vunnet
+   - pakke, avtaleversjon, dato, sted og lenke tilbake til admin
+4. Er `HUBSPOT_OWNER_ID` satt, eier den personen dealen og får en oppgave. HubSpot varsler da etter egne
+   varslingsinnstillinger (sjekk *Innstillinger → Varsler* for deal- og oppgavetildeling). Teamvarselet på e-post
+   sendes da ikke fra portalen; kvitteringen til kunden sendes som før.
+
+Status flyttes manuelt i HubSpot. Feil lagres per forespørsel (`CrmSync`), vises i admin (merke, banner,
+«Synk på nytt») og prøves på nytt av `/api/cron/crm-sync` (daglig, maks fem forsøk i sju døgn). Kunden merker aldri feil.
+
+**Oppsett**
+
+1. Opprett en app med **statisk autentisering** på HubSpots utviklerplattform (private apper/«legacy apps» er utdatert og
+   kan ikke lenger opprettes). Med HubSpot CLI: `hs project create` og velg app, sett `auth.type` til `static` og
+   `auth.distribution` til `private` i `app-hsmeta.json` (fjern `redirectUrls`), legg inn scopes under, kjør
+   `hs project upload` og installer appen på kontoen. Tilgangstokenet står i appens innstillinger i HubSpot
+   (`hs project open`, velg appen, fanen *Auth*). Se
+   [HubSpots veiledning](https://developers.hubspot.com/docs/apps/developer-platform/build-apps/authentication/overview).
+   Scopes (statisk autentisering støtter bare påkrevde scopes): `crm.objects.contacts.read/write`,
+   `crm.objects.companies.read/write`, `crm.objects.deals.read/write`, `crm.objects.owners.read` og
+   `crm.schemas.deals.read/write` (egenskaper). Oppgaver opprettes med kontakt-/dealscopene. Gir oppgaveopprettelse 403
+   («failed» med feilkode `http_403` i admin), legg til scope for oppgaver/engasjementer. Rettighetene er ikke testet mot den faktiske kontoen.
+2. Kjør `HUBSPOT_ACCESS_TOKEN=... npm run hubspot:setup` (eller legg token i `.env`). Skriptet oppretter dealegenskapene
+   (trygt å kjøre flere ganger) og sjekker at pipelinen og steget finnes.
+3. Sett `HUBSPOT_ACCESS_TOKEN` (Sensitive), `HUBSPOT_OWNER_ID` og `HUBSPOT_PORTAL_ID` i Vercel og redeploy. Integrasjonen er
+   på så snart tokenet er satt. Pipeline og steg er som standard `default` og `appointmentscheduled`; andre pipelines
+   velges med `HUBSPOT_PIPELINE_ID` og `HUBSPOT_STAGE_NEW`.
+4. Migrasjon `0005_crm_sync` må være kjørt mot Supabase først.
+
+**Personvern.** Personopplysninger sendes bare til kontakten i HubSpot; dealbeskrivelsen inneholder ikke kontaktdata.
+Kontakter meldes ikke på markedsføring. Personvernteksten på kundesiden nevner HubSpot (EU-datasenter) når
+integrasjonen er på. Automatisk oppbevaringsfrist gjelder bare portalen: det som er overført til HubSpot følges opp og
+slettes der. «Slett alt fra en e-postadresse» arkiverer dealene i HubSpot først (og avbryter hvis det feiler), og kan
+valgfritt slette kontakten permanent (GDPR-sletting). Å slette én enkelt forespørsel i admin rører ikke HubSpot.
 
 ## Personvern og oppbevaring
 

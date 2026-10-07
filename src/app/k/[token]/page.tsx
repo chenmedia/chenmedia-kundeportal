@@ -3,6 +3,7 @@ import { CustomerPage } from "@/components/CustomerPage";
 import { resolvePublished } from "@/server/customers";
 import { emailConfigured } from "@/server/email";
 import { inquiryRetentionMonths } from "@/server/retention";
+import { hubspotConfigured } from "@/server/hubspot";
 
 export const dynamic = "force-dynamic";
 // Forhåndsvisning når lenken deles (Teams, Slack, e-post): bevisst nøytral, uten kundenavn eller priser.
@@ -35,6 +36,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
       mediaUrl={(id) => `/k/${token}/media/${id}`}
       emailConfigured={emailConfigured()}
       retentionMonths={inquiryRetentionMonths()}
+      crmEnabled={hubspotConfigured()}
     />
   );
 }

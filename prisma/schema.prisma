@@ -40,6 +40,8 @@ model Customer {
   contactPhone     String?
   tokenHash        String           @unique
   tokenEnc         String
+  // HubSpot-selskapet denne kunden er koblet til (funnet på navn første gang, så gjenbrukt).
+  hubspotCompanyId String?
   currentVersionId String?          @unique
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -99,6 +101,7 @@ model Inquiry {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   emailJobs      EmailJob[]
+  crmSync        CrmSync?
 
   @@index([customerId])
   @@index([versionId])
@@ -122,6 +125,23 @@ model EmailJob {
   createdAt     DateTime @default(now())
 
   @@index([inquiryId])
+  @@index([status])
+}
+
+model CrmSync {
+  id            String    @id @default(cuid())
+  inquiryId     String    @unique
+  inquiry       Inquiry   @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  status        String    @default("pending") // pending | syncing | synced | failed
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime?
+  errorCategory String?
+  contactId     String?
+  companyId     String?
+  dealId        String?
+  taskId        String?
+  createdAt     DateTime  @default(now())
+
   @@index([status])
 }
 
