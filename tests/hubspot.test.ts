@@ -3,7 +3,7 @@ import { db } from "@/server/db";
 import { submitInquiry, deleteInquiriesByEmail } from "@/server/inquiries";
 import { processCrmSync, retryOutstandingCrmSyncs, hubspotDealUrl, dealName, endOfMonthCloseDate } from "@/server/hubspot";
 import type { InquirySnapshot } from "@/lib/inquiry";
-import { dealPriority } from "@/lib/crm";
+import { dealPriority, setupFailureHint } from "@/lib/crm";
 import { ensureHubspotSetup, PROPERTIES } from "@/server/hubspot-setup";
 import { makePublished, validInput } from "./helpers";
 
@@ -393,5 +393,14 @@ describe("prioritet", () => {
   it("begrunnelsen nevner budsjett og kundehistorikk", () => {
     expect(dealPriority({ amountKr: 50_000, wonCount: 0, ltvKr: 0 }).reason).toMatch(/budsjett fra .*50.*kr, ny kunde/);
     expect(dealPriority({ amountKr: null, wonCount: 2, ltvKr: 90_000 }).reason).toMatch(/budsjett ukjent, 2 vunne deals, LTV/);
+  });
+});
+
+describe("oppsettsfeil i admin", () => {
+  it("skiller avvist token (401) fra manglende scope (403)", () => {
+    expect(setupFailureHint("http_401")).toMatch(/avviste tokenet/);
+    expect(setupFailureHint("http_401")).not.toMatch(/crm\.schemas/);
+    expect(setupFailureHint("http_403")).toMatch(/mangler et scope/);
+    expect(setupFailureHint(null)).toMatch(/pipeline og steg/);
   });
 });
