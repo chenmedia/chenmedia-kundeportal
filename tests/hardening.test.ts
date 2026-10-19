@@ -213,8 +213,8 @@ describe("konfigurasjon", () => {
   it("bruker produksjonsadressen på Vercel når APP_URL mangler", () => {
     vi.stubEnv("APP_URL", "");
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "priser.chenmedia.no");
-    expect(appUrl()).toBe("https://priser.chenmedia.no");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "booking.chenmedia.no");
+    expect(appUrl()).toBe("https://booking.chenmedia.no");
     vi.stubEnv("APP_URL", "https://eksplisitt.example/");
     expect(appUrl()).toBe("https://eksplisitt.example");
   });
